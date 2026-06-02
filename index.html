@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Supabase連携のリアルタイム人狼ゲーム管理アプリ。役職配布・フェーズ管理・勝敗判定をリアルタイムで同期。">
+    <title>リアル人狼ゲーム管理</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="theme-waiting">
+    <div class="particles"></div>
+    <div class="container">
+        <!-- ログイン画面 -->
+        <div id="login-view" class="card login-card">
+            <h1 class="login-title">WEREWOLF</h1>
+            <div class="input-group">
+                <input type="text" id="player-name" class="name-input" placeholder="なまえをいれてね" autocomplete="off"
+                    maxlength="15">
+            </div>
+            <button class="login-btn btn-player" onclick="joinGame('player')">部屋に入る<br><span
+                    style="font-size:0.8rem; font-weight:400;">(プレイヤーとして参加)</span></button>
+            <button class="login-btn btn-gm" onclick="joinGame('gm')">部屋を作る<br><span
+                    style="font-size:0.8rem; font-weight:400;">(GMとして参加)</span></button>
+            <div style="margin-top: 1rem;">
+                <button onclick="clearSession()"
+                    style="background:transparent; border:none; color:rgba(255,255,255,0.4); text-decoration:underline; cursor:pointer;">ログイン情報をリセット</button>
+            </div>
+        </div>
+
+        <!-- メインゲーム画面 -->
+        <div id="game-view" class="hidden">
+            <header class="card phase-display">
+                <div id="gm-name-display" class="gm-badge hidden">GM: 〇〇さん</div>
+
+                <h2>現在のフェーズ</h2>
+                <div id="current-phase" class="phase-badge">読込中...</div>
+
+                <!-- プレイヤー：あなたの役職表示 -->
+                <div id="my-role-area" class="my-role-display hidden">
+                    <div class="my-role-title">あなたの役職</div>
+                    <div id="my-role-name" class="my-role-name">確認中...</div>
+                </div>
+
+                <!-- 待機中：役職設定 (GM専用) -->
+                <div id="role-settings-area" class="role-settings hidden">
+                    <h3>役職バランス設定</h3>
+                    <div id="role-counters"></div>
+                    <div id="total-info" class="total-info total-error">
+                        現在の設定: 計 <span id="total-role-count">0</span> 人 / 参加者: <span id="total-player-count">0</span> 人
+                    </div>
+                </div>
+
+                <!-- 投票進捗カウンター（議論・投票フェーズで全員に表示） -->
+                <div id="vote-progress-area" class="vote-progress-area hidden">
+                    <div id="vote-progress-text" class="vote-progress-text">投票完了：0 / 0人</div>
+                    <div class="vote-progress-bar">
+                        <div id="vote-progress-fill" class="vote-progress-fill"></div>
+                    </div>
+                </div>
+
+                <!-- 参加中プレイヤー一覧 -->
+                <section id="player-list-area" class="player-list-area hidden">
+                    <h3>参加中のプレイヤー</h3>
+                    <div id="gm-hint" class="gm-hint hidden">人狼の行動を待っています...</div>
+                    <div id="player-list" class="player-list"></div>
+                </section>
+            </header>
+
+            <!-- GMパネル -->
+            <main id="gm-panel" class="card gm-panel hidden" style="margin-top: 2rem;">
+                <h3>GM コントロールパネル</h3>
+                <div class="button-group">
+                    <button id="btn-waiting" class="action-btn" onclick="handlePhaseChange('waiting')">待機中</button>
+                    <button class="action-btn" onclick="handlePhaseChange('discussion')">議論開始</button>
+                    <button class="action-btn" onclick="handlePhaseChange('voting')">投票開始</button>
+                    <button class="action-btn" onclick="handlePhaseChange('night')">夜フェーズ</button>
+                </div>
+                <!-- GM専用：投票締め切りボタン（投票フェーズ中のみ表示） -->
+                <div id="vote-close-area" class="hidden"
+                    style="margin-top: 1.5rem; border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 1.5rem;">
+                    <button class="action-btn btn-vote-close" onclick="closeVoting()" style="width:100%;">🗳️
+                        投票を締め切る</button>
+                </div>
+                <div id="reset-area" class="hidden"
+                    style="margin-top: 1.5rem; border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 1.5rem;">
+                    <button id="btn-reset" class="action-btn btn-danger" onclick="resetGame()"
+                        style="width: 100%;">ゲーム強制終了 (ロビーへ戻る)</button>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- 霊界モード（死者）オーバーレイ -->
+    <div id="ghost-mode-overlay" class="ghost-overlay hidden">
+        <div class="ghost-message">あなたは死亡しました<small>( 観戦モード )</small></div>
+    </div>
+
+    <!-- 夜フェーズ（生存者）オーバーレイ -->
+    <div id="night-action-overlay" class="night-overlay hidden">
+        <!-- 人狼以外の待機画面 -->
+        <div id="night-waiting" class="night-content hidden">
+            <h2>夜が訪れました</h2>
+            <p style="color:#c0caf5;">人狼が暗躍しています。<br>静かに朝を待ちましょう…</p>
+        </div>
+
+        <!-- 人狼用の襲撃画面 -->
+        <div id="night-wolf" class="night-content hidden">
+            <h2 style="color: #f7768e;">襲撃ターゲット選択</h2>
+            <p style="color:#c0caf5;">今夜、誰を襲撃しますか？</p>
+            <div id="wolf-target-list" class="target-list"></div>
+        </div>
+    </div>
+
+    <!-- ======================================
+         投票アクションオーバーレイ（生存プレイヤー用）
+         ====================================== -->
+    <div id="vote-overlay" class="vote-overlay hidden">
+        <!-- 投票前：ターゲット選択 -->
+        <div id="vote-select" class="night-content hidden">
+            <h2>🗳️ 投票</h2>
+            <p style="color:#c0caf5;">追放したいプレイヤーに投票してください</p>
+
+            <div id="vote-progress-area-player" class="vote-progress-area hidden"
+                style="margin-bottom: 1.5rem; text-align: left;">
+                <div id="vote-progress-text-player" class="vote-progress-text">投票完了：0 / 0人</div>
+                <div class="vote-progress-bar">
+                    <div id="vote-progress-fill-player" class="vote-progress-fill"></div>
+                </div>
+            </div>
+
+            <div id="vote-target-list" class="target-list"></div>
+        </div>
+        <!-- 投票済：待機 -->
+        <div id="vote-done" class="night-content hidden">
+            <h2>✅ 投票完了</h2>
+            <p style="color:#c0caf5;">他のプレイヤーを待っています…</p>
+        </div>
+        <!-- 霊界：観戦 -->
+        <div id="vote-ghost" class="night-content hidden">
+            <h2>👻 観戦中</h2>
+            <p style="color:#c0caf5;">生存者の投票を見守っています</p>
+        </div>
+    </div>
+
+    <!-- ======================================
+         投票結果オーバーレイ（追放発表・答え合わせ）
+         ====================================== -->
+    <div id="vote-result-overlay" class="vote-result-overlay hidden">
+        <div class="vote-result-content">
+            <div id="vote-result-exile" class="vote-result-exile"></div>
+            <div id="vote-result-title" class="vote-result-title">― 投票結果 ―</div>
+            <div id="vote-result-list" class="vote-result-list"></div>
+            <div id="vote-countdown" class="vote-countdown hidden"></div>
+            <!-- GMのみ表示：夜フェーズへ進むボタン -->
+            <button id="btn-next-night" class="btn-next-night hidden" onclick="proceedToNight()">
+                🌙 夜フェーズへ進む
+            </button>
+        </div>
+    </div>
+
+    <!-- ======================================
+         リザルト画面（勝敗発表）オーバーレイ
+         ====================================== -->
+    <div id="result-overlay" class="result-overlay hidden">
+        <div class="result-content">
+            <!-- 勝利アイコン -->
+            <span id="result-icon" class="result-icon">⚔️</span>
+
+            <!-- 勝利タイトル -->
+            <div id="result-title" class="result-title"></div>
+
+            <!-- サブタイトル -->
+            <div id="result-subtitle" class="result-subtitle"></div>
+
+            <!-- 答え合わせリスト -->
+            <div class="result-reveal-card">
+                <h3>― 役職 答え合わせ ―</h3>
+                <div id="result-player-list" class="result-player-list"></div>
+            </div>
+
+            <!-- GMのみ表示：ロビーに戻るボタン -->
+            <button id="btn-return-lobby" class="btn-return-lobby hidden" onclick="resetGame()">
+                🏠 ロビーに戻る
+            </button>
+        </div>
+    </div>
+
+    <!-- Supabase JS Client (v2) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- アプリケーションロジック -->
+    <script src="app.js?v=2024052601"></script>
+</body>
+
+</html>
