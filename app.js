@@ -45,6 +45,7 @@ let voteCountdownTimer = null;  // カウントダウンタイマー ID
 // =============================================
 const phaseNames = {
     'waiting': '待機中',
+    'morning': '朝フェーズ',
     'discussion': '議論中',
     'voting': '投票中',
     'night': '夜フェーズ',
@@ -109,6 +110,7 @@ async function updatePhaseDisplay(phase) {
         myRoleArea.classList.add('hidden');
         document.getElementById('ghost-mode-overlay').classList.add('hidden');
         document.getElementById('night-action-overlay').classList.add('hidden');
+        document.getElementById('morning-overlay').classList.add('hidden');
         document.getElementById('vote-overlay').classList.add('hidden');
         document.getElementById('vote-progress-area').classList.add('hidden');
         document.getElementById('vote-result-overlay').classList.add('hidden');
@@ -123,6 +125,8 @@ async function updatePhaseDisplay(phase) {
             document.getElementById('btn-waiting').classList.add('hidden');
             document.getElementById('reset-area').classList.add('hidden');
             document.getElementById('vote-close-area').classList.add('hidden');
+            document.getElementById('morning-start-area').classList.add('hidden');
+            document.getElementById('morning-end-area').classList.add('hidden');
         }
 
     } else {
@@ -144,6 +148,18 @@ async function updatePhaseDisplay(phase) {
             playerListArea.classList.remove('hidden');
             document.getElementById('btn-waiting').classList.add('hidden');
             document.getElementById('reset-area').classList.remove('hidden');
+            // 夢フェーズ中のみ「朝フェーズへ進む」ボタンを表示
+            if (phase === 'night') {
+                document.getElementById('morning-start-area').classList.remove('hidden');
+            } else {
+                document.getElementById('morning-start-area').classList.add('hidden');
+            }
+            // 朝フェーズ中のみ「朝を終了して議論開始」ボタンを表示
+            if (phase === 'morning') {
+                document.getElementById('morning-end-area').classList.remove('hidden');
+            } else {
+                document.getElementById('morning-end-area').classList.add('hidden');
+            }
             // 投票フェーズのみ「投票を締め切る」ボタンを表示
             if (phase === 'voting') {
                 document.getElementById('vote-close-area').classList.remove('hidden');
@@ -166,6 +182,7 @@ async function updatePhaseDisplay(phase) {
             if (phase === 'voting') {
                 // ── 投票フェーズ ──
                 document.getElementById('night-action-overlay').classList.add('hidden');
+                document.getElementById('morning-overlay').classList.add('hidden');
                 if (isMeAlive) {
                     renderVoteUI();
                 } else {
@@ -176,10 +193,11 @@ async function updatePhaseDisplay(phase) {
                     document.getElementById('vote-ghost').classList.remove('hidden');
                 }
 
-            } else if (phase === 'discussion') {
-                // ── 議論フェーズ（朝）──
+            } else if (phase === 'morning') {
+                // ── 朝フェーズ ──
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('night-action-overlay').classList.add('hidden');
+                document.getElementById('morning-overlay').classList.remove('hidden');
                 // 占い師の場合、占い結果を表示
                 if (myRoleName === '預言者') {
                     await showSeerResult();
@@ -192,6 +210,15 @@ async function updatePhaseDisplay(phase) {
                 } else {
                     document.getElementById('medium-result-area').classList.add('hidden');
                 }
+
+            } else if (phase === 'discussion') {
+                // ── 議論フェーズ（明るい昼）──
+                document.getElementById('vote-overlay').classList.add('hidden');
+                document.getElementById('night-action-overlay').classList.add('hidden');
+                document.getElementById('morning-overlay').classList.add('hidden');
+                // 議論フェーズでは占い・霊媒結果は表示しない
+                document.getElementById('seer-result-area').classList.add('hidden');
+                document.getElementById('medium-result-area').classList.add('hidden');
 
             } else if (phase === 'night') {
                 // ── 夜フェーズ ──
@@ -265,6 +292,7 @@ async function updatePhaseDisplay(phase) {
                 // その他のフェーズ
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('night-action-overlay').classList.add('hidden');
+                document.getElementById('morning-overlay').classList.add('hidden');
                 document.getElementById('seer-result-area').classList.add('hidden');
                 document.getElementById('medium-result-area').classList.add('hidden');
                 hasActedTonight = false;
@@ -1341,8 +1369,8 @@ async function handlePhaseChange(newPhase) {
         hasVotedToday = false;
         isCountingVotes = false;
     }
-    // 夜フェーズから朝（discussion）へ直接移行する場合：占い師・霊媒師の結果を集計
-    if (lastKnownPhase === 'night' && newPhase === 'discussion') {
+    // 夜フェーズから朝フェーズ（morning）へ移行する場合：占い師・霊媒師の結果を集計
+    if (lastKnownPhase === 'night' && newPhase === 'morning') {
         // 占い師の集計
         try {
             const { data: seerData, error: seerErr } = await supabaseClient

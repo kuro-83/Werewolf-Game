@@ -78,6 +78,20 @@
                     <button class="action-btn" onclick="handlePhaseChange('voting')">投票開始</button>
                     <button class="action-btn" onclick="handlePhaseChange('night')">夜フェーズ</button>
                 </div>
+                <!-- GM専用：朝フェーズへ進むボタン（夜フェーズ中のみ表示） -->
+                <div id="morning-start-area" class="hidden"
+                    style="margin-top: 1.5rem; border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 1.5rem;">
+                    <button class="action-btn" onclick="handlePhaseChange('morning')" style="width:100%;">
+                        🌅 朝フェーズへ進む（集計実行）
+                    </button>
+                </div>
+                <!-- GM専用：朝を終了して議論開始ボタン（朝フェーズ中のみ表示） -->
+                <div id="morning-end-area" class="hidden"
+                    style="margin-top: 1.5rem; border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 1.5rem;">
+                    <button class="action-btn" onclick="handlePhaseChange('discussion')" style="width:100%;">
+                        ☀️ 朝を終了して議論開始
+                    </button>
+                </div>
                 <!-- GM専用：投票締め切りボタン（投票フェーズ中のみ表示） -->
                 <div id="vote-close-area" class="hidden"
                     style="margin-top: 1.5rem; border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 1.5rem;">
@@ -90,6 +104,27 @@
                         style="width: 100%;">ゲーム強制終了 (ロビーへ戻る)</button>
                 </div>
             </main>
+        </div>
+    </div>
+
+    <!-- ======================================
+         朝フェーズ専用オーバーレイ（全プレイヤー共通）
+         ====================================== -->
+    <div id="morning-overlay" class="night-overlay hidden">
+        <!-- 共通：朝の案内メッセージ -->
+        <div id="morning-common" class="night-content">
+            <h2 style="color: #e0af68;">🌅 朝になりました</h2>
+            <p style="color:#c0caf5;">昨晩の行動結果を確認してください。<br>GMが議論開始を宣言するまでお待ちください。</p>
+        </div>
+        <!-- 占い師専用：占い結果 -->
+        <div id="seer-result-area" class="night-content hidden">
+            <h2 style="color: #bb9af7;">🔮 占い結果</h2>
+            <div id="seer-result-text" style="color:#c0caf5; font-size:1.1rem; margin-top:0.5rem;"></div>
+        </div>
+        <!-- 霊媒師専用：霊媒結果 -->
+        <div id="medium-result-area" class="night-content hidden">
+            <h2 style="color: #73daca;">🔮 霊媒結果</h2>
+            <div id="medium-result-text" style="color:#c0caf5; font-size:1.1rem; margin-top:0.5rem;"></div>
         </div>
     </div>
 
@@ -123,12 +158,6 @@
                 onclick="submitDivination()">🔮 占う</button>
         </div>
 
-        <!-- 占い結果表示（朝フェーズ・占い師のみ） -->
-        <div id="seer-result-area" class="night-content hidden">
-            <h2 style="color: #bb9af7;">🔮 占い結果</h2>
-            <div id="seer-result-text" style="color:#c0caf5; font-size:1.1rem; margin-top:0.5rem;"></div>
-        </div>
-
         <!-- 霊媒師用の霊媒画面 -->
         <div id="night-medium" class="night-content hidden">
             <h2 style="color: #73daca;">🔮 霊媒ターゲット選択</h2>
@@ -137,12 +166,6 @@
             <button type="button" id="btn-medium-action" class="target-btn"
                 style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#73daca,#2ac3de); display:none;"
                 onclick="submitMedium()">🔮 霊媒する</button>
-        </div>
-
-        <!-- 霊媒結果表示（朝フェーズ・霊媒師のみ） -->
-        <div id="medium-result-area" class="night-content hidden">
-            <h2 style="color: #73daca;">🔮 霊媒結果</h2>
-            <div id="medium-result-text" style="color:#c0caf5; font-size:1.1rem; margin-top:0.5rem;"></div>
         </div>
     </div>
 
