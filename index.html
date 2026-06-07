@@ -175,6 +175,16 @@
                 style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#73daca,#2ac3de); display:none;"
                 onclick="submitMedium()">🔮 霊媒する</button>
         </div>
+
+        <!-- 騎士用の守護画面 -->
+        <div id="night-knight" class="night-content hidden">
+            <h2 style="color: #a78bfa;">🛡️ 守護ターゲット選択</h2>
+            <p style="color:#c0caf5;">今夜、誰を守りますか？</p>
+            <div id="knight-target-list" class="target-list"></div>
+            <button type="button" id="btn-knight-action" class="target-btn"
+                style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#a78bfa,#7aa2f7); display:none;"
+                onclick="submitKnightGuard()">🛡️ 守る</button>
+        </div>
     </div>
 
     <!-- ======================================

@@ -57,10 +57,11 @@ const ROLES_INFO = [
     { id: 'citizen', name: '市民' },
     { id: 'seer', name: '預言者' },
     { id: 'medium', name: '霊媒師' },
+    { id: 'knight', name: '騎士' },
     { id: 'teruteru', name: 'てるてる' }
 ];
 
-let roleCounts = { wolf: 0, citizen: 0, seer: 0, medium: 0, teruteru: 0 };
+let roleCounts = { wolf: 0, citizen: 0, seer: 0, medium: 0, knight: 0, teruteru: 0 };
 
 // 役職バッジのCSSクラスマッピング
 const ROLE_BADGE_CLASS = {
@@ -68,6 +69,7 @@ const ROLE_BADGE_CLASS = {
     '市民': 'role-badge-citizen',
     '預言者': 'role-badge-seer',
     '霊媒師': 'role-badge-medium',
+    '騎士': 'role-badge-knight',
     'てるてる': 'role-badge-teruteru'
 };
 
@@ -243,12 +245,14 @@ async function updatePhaseDisplay(phase) {
                         document.getElementById('night-wolf').classList.remove('hidden');
                         document.getElementById('night-seer').classList.add('hidden');
                         document.getElementById('night-medium').classList.add('hidden');
+                        document.getElementById('night-knight').classList.add('hidden');
                         document.getElementById('night-waiting').classList.add('hidden');
                         renderWolfTargets();
                     } else if (myRoleName === '預言者' && !hasActedTonight) {
                         // ── 占い師の夜アクション ──
                         document.getElementById('night-wolf').classList.add('hidden');
                         document.getElementById('night-medium').classList.add('hidden');
+                        document.getElementById('night-knight').classList.add('hidden');
                         document.getElementById('night-waiting').classList.add('hidden');
                         document.getElementById('night-seer').classList.remove('hidden');
                         renderSeerTargets();
@@ -256,13 +260,23 @@ async function updatePhaseDisplay(phase) {
                         // ── 霊媒師の夜アクション ──
                         document.getElementById('night-wolf').classList.add('hidden');
                         document.getElementById('night-seer').classList.add('hidden');
+                        document.getElementById('night-knight').classList.add('hidden');
                         document.getElementById('night-waiting').classList.add('hidden');
                         document.getElementById('night-medium').classList.remove('hidden');
                         renderMediumTargets();
+                    } else if (myRoleName === '騎士' && !hasActedTonight) {
+                        // ── 騎士の夜アクション ──
+                        document.getElementById('night-wolf').classList.add('hidden');
+                        document.getElementById('night-seer').classList.add('hidden');
+                        document.getElementById('night-medium').classList.add('hidden');
+                        document.getElementById('night-waiting').classList.add('hidden');
+                        document.getElementById('night-knight').classList.remove('hidden');
+                        renderKnightTargets();
                     } else {
                         document.getElementById('night-wolf').classList.add('hidden');
                         document.getElementById('night-seer').classList.add('hidden');
                         document.getElementById('night-medium').classList.add('hidden');
+                        document.getElementById('night-knight').classList.add('hidden');
                         document.getElementById('night-waiting').classList.remove('hidden');
                         if (hasActedTonight) {
                             if (myRoleName === '人狼') {
@@ -276,6 +290,10 @@ async function updatePhaseDisplay(phase) {
                             } else if (myRoleName === '霊媒師') {
                                 document.getElementById('night-waiting').innerHTML = `
                                     <h2>🔮 霊媒完了</h2><p style="color:#c0caf5;">霊媒完了。朝を待っています...</p>
+                                `;
+                            } else if (myRoleName === '騎士') {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>🛡️ 守護完了</h2><p style="color:#c0caf5;">守護完了。朝を待っています...</p>
                                 `;
                             } else {
                                 document.getElementById('night-waiting').innerHTML = `
@@ -1225,8 +1243,8 @@ function showMorningVictims() {
     const uniqueVictimIds = [...new Set(wolfTargetIds)];
 
     if (uniqueVictimIds.length > 0) {
-        // ターゲットになったプレイヤーの名前を取得
-        const victims = currentPlayers.filter(p => uniqueVictimIds.includes(p.id));
+        // ターゲットになったプレイヤーの中で、実際死亡している人（＝騎士に守られなかった人）の名前を取得
+        const victims = currentPlayers.filter(p => uniqueVictimIds.includes(p.id) && !p.is_alive);
         if (victims.length > 0) {
             const victimNames = victims.map(v => v.name).join(' さん、');
             textEl.innerHTML = `昨晩の犠牲者は <span style="color:#f7768e; font-weight:bold;">${victimNames} さん</span> でした。`;
@@ -1309,6 +1327,82 @@ async function submitAttack() {
     } catch (err) {
         console.error('襲撃送信エラー:', err);
         alert('襲撃の送信に失敗しました。');
+        if (btn) btn.disabled = false;
+    }
+}
+
+
+// =============================================
+// 守護処理（騎士専用）
+// =============================================
+let selectedKnightTargetId = null;
+let selectedKnightTargetName = null;
+
+function renderKnightTargets() {
+    const list = document.getElementById('knight-target-list');
+    list.innerHTML = '';
+    selectedKnightTargetId = null;
+    selectedKnightTargetName = null;
+
+    const btn = document.getElementById('btn-knight-action');
+    if (btn) {
+        btn.style.display = 'none';
+        btn.disabled = false;
+    }
+
+    // 生存しているプレイヤー全員（自分自身も守護対象に含める）
+    const targets = currentPlayers.filter(p => p.is_alive);
+
+    if (targets.length === 0) {
+        list.innerHTML = '<p style="color:#888;">守護できるプレイヤーがいません</p>';
+        return;
+    }
+
+    targets.forEach(t => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'target-btn';
+        b.textContent = t.name;
+        b.dataset.id = t.id;
+        b.onclick = () => {
+            document.querySelectorAll('#knight-target-list .target-btn').forEach(x => x.classList.remove('selected'));
+            b.classList.add('selected');
+            selectedKnightTargetId = t.id;
+            selectedKnightTargetName = t.name;
+            if (btn) btn.style.display = '';
+        };
+        list.appendChild(b);
+    });
+}
+
+async function submitKnightGuard() {
+    if (!selectedKnightTargetId) {
+        alert('守護するプレイヤーを選んでください');
+        return;
+    }
+    if (!confirm(`${selectedKnightTargetName} さんを守護しますか？`)) return;
+
+    const btn = document.getElementById('btn-knight-action');
+    if (btn) btn.disabled = true;
+
+    try {
+        const { error } = await supabaseClient
+            .from('players')
+            .update({ night_target_id: selectedKnightTargetId })
+            .eq('name', myPlayerName);
+
+        if (error) throw error;
+
+        hasActedTonight = true;
+        document.getElementById('night-knight').classList.add('hidden');
+        document.getElementById('night-waiting').classList.remove('hidden');
+        document.getElementById('night-waiting').innerHTML = `
+            <h2>🛡️ 守護完了</h2>
+            <p style="color:#c0caf5;">今夜の守護先を設定しました。<br>静かに朝を待ちましょう…</p>
+        `;
+    } catch (err) {
+        console.error('守護送信エラー:', err);
+        alert('守護の送信に失敗しました。');
         if (btn) btn.disabled = false;
     }
 }
@@ -1488,47 +1582,54 @@ async function handlePhaseChange(newPhase) {
         } catch (mediumErr) {
             console.warn('[MEDIUM] handlePhaseChange 霊媒集計スキップ:', mediumErr);
         }
-        // 人狼の襲撃集計
+        // 人狼の襲撃および騎士の守護集計
         try {
+            // 1. 生存している人狼の night_target_id を取得
             const { data: wolvesData, error: wolvesErr } = await supabaseClient
                 .from('players')
                 .select('id, name, night_target_id')
                 .eq('role', '人狼')
                 .eq('is_alive', true);
 
-            if (!wolvesErr && wolvesData && wolvesData.length > 0) {
-                const victimIds = wolvesData
-                    .map(w => w.night_target_id)
-                    .filter(id => id !== null && id !== undefined && id !== '');
+            if (wolvesErr) throw wolvesErr;
 
-                const uniqueVictimIds = [...new Set(victimIds)];
+            // 2. 生存している騎士の night_target_id を取得
+            const { data: knightsData, error: knightsErr } = await supabaseClient
+                .from('players')
+                .select('id, name, night_target_id')
+                .eq('role', '騎士')
+                .eq('is_alive', true);
 
-                if (uniqueVictimIds.length > 0) {
-                    // IDから名前を取得（確実に動作する eq('name', name) で更新するために名前を引く）
-                    const { data: victimsData, error: victimsErr } = await supabaseClient
+            if (knightsErr) throw knightsErr;
+
+            const attackTargetIds = wolvesData
+                ? wolvesData.map(w => w.night_target_id).filter(id => id !== null && id !== undefined && id !== '')
+                : [];
+
+            const guardTargetIds = knightsData
+                ? knightsData.map(k => k.night_target_id).filter(id => id !== null && id !== undefined && id !== '')
+                : [];
+
+            // 3. 襲撃対象から守護対象を除外して、実際の犠牲者IDを決定
+            const uniqueAttackIds = [...new Set(attackTargetIds)];
+            const actualVictimIds = uniqueAttackIds.filter(attackId => !guardTargetIds.includes(attackId));
+
+            if (actualVictimIds.length > 0) {
+                // 4. 被襲撃者を個別にID指定（eq('id', id)）で死亡に更新
+                for (const victimId of actualVictimIds) {
+                    const { error: killErr } = await supabaseClient
                         .from('players')
-                        .select('name')
-                        .in('id', uniqueVictimIds);
+                        .update({ is_alive: false })
+                        .eq('id', victimId);
 
-                    if (!victimsErr && victimsData && victimsData.length > 0) {
-                        for (const victim of victimsData) {
-                            const { error: killErr } = await supabaseClient
-                                .from('players')
-                                .update({ is_alive: false })
-                                .eq('name', victim.name);
-
-                            if (killErr) throw killErr;
-                            console.log(`[WOLF] handlePhaseChange 襲撃対象を死亡に更新しました: ${victim.name}`);
-                        }
-                    } else if (victimsErr) {
-                        throw victimsErr;
-                    }
+                    if (killErr) throw killErr;
+                    console.log(`[WOLF/KNIGHT] handlePhaseChange 襲撃対象を死亡に更新しました (ID: ${victimId})`);
                 }
-            } else if (wolvesErr) {
-                throw wolvesErr;
+            } else {
+                console.log('[WOLF/KNIGHT] handlePhaseChange 襲撃は発生しなかったか、騎士によって守られました。');
             }
-        } catch (wolfErr) {
-            console.warn('[WOLF] handlePhaseChange 人狼襲撃集計スキップ/エラー:', wolfErr);
+        } catch (evalErr) {
+            console.warn('[WOLF/KNIGHT] handlePhaseChange 襲撃・守護集計スキップ/エラー:', evalErr);
         }
     }
     // 夢フェーズへ直接移行する場合（GMが「夢フェーズ」ボタンを押した場合など）もリセットする

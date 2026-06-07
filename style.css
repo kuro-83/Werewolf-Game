@@ -741,6 +741,12 @@ body.theme-result-wolf {
     color: #ffc777;
 }
 
+.role-badge-knight {
+    background: rgba(167, 139, 250, 0.2);
+    border: 1px solid #a78bfa;
+    color: #a78bfa;
+}
+
 .role-badge-teruteru {
     background: rgba(125, 207, 255, 0.2);
     border: 1px solid #7dcfff;
