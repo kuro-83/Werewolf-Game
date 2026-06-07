@@ -197,6 +197,8 @@ async function updatePhaseDisplay(phase) {
                 // ── 夜フェーズ ──
                 // 「投票日のフラグ」を全クライアントでリセット（2回目以降の投票対策）
                 hasVotedToday = false;
+                // 夜の行動済フラグをリセット（占い師・霊媒師が2ターン目以降も操作できるようにする）
+                hasActedTonight = false;
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('vote-result-overlay').classList.add('hidden');
                 // 占い結果エリアを隠す（夜フェーズ開始時）
@@ -918,6 +920,15 @@ async function proceedToNight() {
             .neq('name', 'dummy_string_for_reset_12345');
         if (resetError) throw resetError;
 
+        // 全員の night_target_id ・ night_result を NULL にリセット
+        // （占い師・霊媒師が2ターン目以降に再度アクションできるようにする）
+        const { error: nightResetError } = await supabaseClient
+            .from('players')
+            .update({ night_target_id: null, night_result: null })
+            .neq('name', 'dummy_string_for_reset_12345');
+        if (nightResetError) throw nightResetError;
+        console.log('[NIGHT] night_target_id / night_result をリセットしました');
+
         // フェーズを night に
         const { error: phaseError } = await supabaseClient
             .from('game_status')
@@ -1387,6 +1398,19 @@ async function handlePhaseChange(newPhase) {
             }
         } catch (mediumErr) {
             console.warn('[MEDIUM] handlePhaseChange 霊媒集計スキップ:', mediumErr);
+        }
+    }
+    // 夢フェーズへ直接移行する場合（GMが「夢フェーズ」ボタンを押した場合など）もリセットする
+    if (newPhase === 'night') {
+        try {
+            const { error: nightResetError } = await supabaseClient
+                .from('players')
+                .update({ night_target_id: null, night_result: null })
+                .neq('name', 'dummy_string_for_reset_12345');
+            if (nightResetError) throw nightResetError;
+            console.log('[NIGHT] handlePhaseChange: night_target_id / night_result をリセットしました');
+        } catch (nightResetErr) {
+            console.warn('[NIGHT] night リセットに失敗しましたが、フェーズ移行は続行します:', nightResetErr);
         }
     }
     try {
