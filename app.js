@@ -1640,7 +1640,7 @@ async function startGameSync() {
         )
         // プレイヤー情報の更新（is_alive / vote_target_id 変更）
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players' },
-            (payload) => {
+            async (payload) => {
                 const idx = currentPlayers.findIndex(p => p.name === payload.new.name);
                 // 更新前の法態を保存（vote_target_id変化検知に使用）
                 const prevPlayer = idx !== -1 ? currentPlayers[idx] : null;
