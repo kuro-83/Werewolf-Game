@@ -1076,8 +1076,8 @@ async function showSeerResult() {
                 : '<span style="color:#9ece6a; font-weight:bold;">【人間】</span>';
             resultText.innerHTML = `「${targetName}」さんは ${resultLabel} でした`;
             resultArea.classList.remove('hidden');
-            // night-action-overlay も表示して見えるようにする
-            document.getElementById('night-action-overlay').classList.remove('hidden');
+            // morning-overlay 内に表示されるので morning-overlay を表示状態にする
+            document.getElementById('morning-overlay').classList.remove('hidden');
         } else {
             // 占い結果がまだない場合（初日など）は非表示のまま
             resultArea.classList.add('hidden');
@@ -1192,8 +1192,8 @@ async function showMediumResult() {
                 : '<span style="color:#9ece6a; font-weight:bold;">【人間】</span>';
             resultText.innerHTML = `🔮 霊媒結果: 「${targetName}」さんは ${resultLabel} でした`;
             resultArea.classList.remove('hidden');
-            // night-action-overlay も表示して見えるようにする
-            document.getElementById('night-action-overlay').classList.remove('hidden');
+            // morning-overlay 内に表示されるので morning-overlay を表示状態にする
+            document.getElementById('morning-overlay').classList.remove('hidden');
         } else {
             // 霊媒結果がまだない場合は非表示
             resultArea.classList.add('hidden');
@@ -1676,6 +1676,20 @@ async function startGameSync() {
                     updateVoteProgress();
                     if (myRoleType === 'gm') {
                         checkAllVoted();
+                    }
+                }
+
+                // 自分の night_result が「実際に変化」した場合→ 朝フェーズ中なら結果を再表示
+                // （フェーズ変更イベントと night_result 更新イベントの到着順穏で結果が見えない場合のフォールバック）
+                if (myRoleType === 'player' && payload.new.name === myPlayerName && lastKnownPhase === 'morning') {
+                    const prevResult = prevPlayer ? prevPlayer.night_result : undefined;
+                    if (payload.new.night_result !== prevResult && payload.new.night_result) {
+                        console.log('[MORNING] night_result が到着。結果を再表示します。');
+                        if (myRoleName === '預言者') {
+                            await showSeerResult();
+                        } else if (myRoleName === '霊媒師') {
+                            await showMediumResult();
+                        }
                     }
                 }
             }
