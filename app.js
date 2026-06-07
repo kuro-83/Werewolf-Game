@@ -1504,14 +1504,28 @@ async function handlePhaseChange(newPhase) {
                 const uniqueVictimIds = [...new Set(victimIds)];
 
                 if (uniqueVictimIds.length > 0) {
-                    const { error: killErr } = await supabaseClient
+                    // IDから名前を取得（確実に動作する eq('name', name) で更新するために名前を引く）
+                    const { data: victimsData, error: victimsErr } = await supabaseClient
                         .from('players')
-                        .update({ is_alive: false })
+                        .select('name')
                         .in('id', uniqueVictimIds);
 
-                    if (killErr) throw killErr;
-                    console.log(`[WOLF] handlePhaseChange 襲撃対象を死亡に更新しました: ${uniqueVictimIds}`);
+                    if (!victimsErr && victimsData && victimsData.length > 0) {
+                        for (const victim of victimsData) {
+                            const { error: killErr } = await supabaseClient
+                                .from('players')
+                                .update({ is_alive: false })
+                                .eq('name', victim.name);
+
+                            if (killErr) throw killErr;
+                            console.log(`[WOLF] handlePhaseChange 襲撃対象を死亡に更新しました: ${victim.name}`);
+                        }
+                    } else if (victimsErr) {
+                        throw victimsErr;
+                    }
                 }
+            } else if (wolvesErr) {
+                throw wolvesErr;
             }
         } catch (wolfErr) {
             console.warn('[WOLF] handlePhaseChange 人狼襲撃集計スキップ/エラー:', wolfErr);
