@@ -53,12 +53,54 @@ const phaseNames = {
 };
 
 const ROLES_INFO = [
-    { id: 'wolf', name: '人狼' },
-    { id: 'citizen', name: '市民' },
-    { id: 'seer', name: '預言者' },
-    { id: 'medium', name: '霊媒師' },
-    { id: 'knight', name: '騎士' },
-    { id: 'teruteru', name: 'てるてる' }
+    {
+        id: 'wolf',
+        name: '人狼',
+        faction: '人狼陣営',
+        summary: '夜に他プレイヤーを襲撃し、生存人数を減らす。',
+        details: '夜フェーズに人狼同士で襲撃するターゲットを選択し、翌朝に死亡させます。占い結果や霊媒結果では「人狼」と判定されます。',
+        win_condition: '生存している人狼の人数が、市民陣営（他役職）の生存人数以上になること。'
+    },
+    {
+        id: 'citizen',
+        name: '市民',
+        faction: '市民陣営',
+        summary: '能力を持たない普通の人間。議論を通じて人狼を推測し、追放する。',
+        details: '夜フェーズのアクションはありません。昼の議論と投票により、人狼を全員追放することを目指します。占い・霊媒結果は「人間」です。',
+        win_condition: '人狼を全員追放すること（市民陣営の勝利）。'
+    },
+    {
+        id: 'seer',
+        name: '預言者',
+        faction: '市民陣営',
+        summary: '毎晩、生存者の中から1人を選び、その正体（人狼か人間か）を知る。',
+        details: '夜フェーズに生存者1人を選んで占います。その結果（人狼または人間）は翌朝フェーズに本人のみに開示されます。',
+        win_condition: '人狼を全員追放すること（市民陣営の勝利）。'
+    },
+    {
+        id: 'medium',
+        name: '霊媒師',
+        faction: '市民陣営',
+        summary: '毎晩、死亡したプレイヤーの中から1人を選び、その正体を知る。',
+        details: '夜フェーズに死亡しているプレイヤーから1人を選び、霊媒します。その結果（人狼または人間）は翌朝フェーズに本人のみに開示されます。',
+        win_condition: '人狼を全員追放すること（市民陣営の勝利）。'
+    },
+    {
+        id: 'knight',
+        name: '騎士',
+        faction: '市民陣営',
+        summary: '毎晩、生存しているプレイヤーの中から1人を人狼の襲撃から守る。',
+        details: '夜フェーズに生存しているプレイヤー（自分自身を含む）を1人選択し、守護します。人狼の襲撃先と一致した場合は、そのプレイヤーの死亡を防ぐことができます。',
+        win_condition: '人狼を全員追放すること（市民陣営の勝利）。'
+    },
+    {
+        id: 'teruteru',
+        name: 'てるてる',
+        faction: '第三陣営',
+        summary: '昼の投票で追放（処刑）されると単独で勝利する。',
+        details: '夜のアクションはありません。人狼に襲撃されて死亡した場合は敗北となります。昼の投票で追放された場合のみ、その場で単独勝利（teruteru）としてゲームが終了します。',
+        win_condition: '昼フェーズの投票によって自分が追放（処刑）されること。'
+    }
 ];
 
 let roleCounts = { wolf: 0, citizen: 0, seer: 0, medium: 0, knight: 0, teruteru: 0 };
@@ -1474,7 +1516,10 @@ function initRoleCounters() {
         const row = document.createElement('div');
         row.className = 'role-row';
         row.innerHTML = `
-            <div class="role-name">${role.name}</div>
+            <div class="role-name-wrapper" style="display:flex; align-items:center; gap:0.5rem;">
+                <div class="role-name">${role.name}</div>
+                <button type="button" class="info-icon-btn" onclick="showRoleInfoModal('${role.id}')" style="background:transparent; border:none; color:var(--accent); cursor:pointer; font-size:1rem; padding:0;">ℹ️</button>
+            </div>
             <div class="counter-group">
                 <button class="counter-btn" onclick="changeRoleCount('${role.id}', -1)">-</button>
                 <div id="count-${role.id}" class="role-count-display">0</div>
@@ -1951,6 +1996,150 @@ async function startGameSync() {
         .subscribe();
 }
 
+// =============================================
+// 役職説明モーダル・ルールブック制御
+// =============================================
+
+/**
+ * 役職説明モーダルを開く
+ */
+function openHelpModal() {
+    const modal = document.getElementById('help-modal');
+    modal.classList.remove('hidden');
+
+    const myHelpArea = document.getElementById('my-role-help-area');
+    const myHelpContent = document.getElementById('my-role-help-content');
+
+    // 役職確定状態（myRoleNameが存在する）かつ「確認中...」ではない場合
+    if (myRoleName && myRoleName !== '確認中...') {
+        const myRoleInfo = ROLES_INFO.find(r => r.name === myRoleName);
+        if (myRoleInfo) {
+            myHelpContent.innerHTML = generateRoleHelpHtml(myRoleInfo);
+            myHelpArea.classList.remove('hidden');
+        } else {
+            // 未確定（ロビー待機中など）
+            myHelpArea.classList.remove('hidden');
+            myHelpContent.innerHTML = '<p style="color:#888; text-align:center; margin: 0.5rem 0;">ゲーム開始後にあなたの役職が表示されます</p>';
+        }
+    } else {
+        // 未確定（ロビー待機中など）
+        myHelpArea.classList.remove('hidden');
+        myHelpContent.innerHTML = '<p style="color:#888; text-align:center; margin: 0.5rem 0;">ゲーム開始後にあなたの役職が表示されます</p>';
+    }
+
+    // 全役職一覧の描画（アコーディオン形式）
+    const accordion = document.getElementById('all-roles-accordion');
+    accordion.innerHTML = '';
+
+    ROLES_INFO.forEach(role => {
+        const item = document.createElement('div');
+        item.className = 'accordion-item';
+
+        const header = document.createElement('div');
+        header.className = 'accordion-header';
+        header.innerHTML = `<span>${role.name}</span> <span class="accordion-badge ${ROLE_BADGE_CLASS[role.name]}">${role.faction}</span>`;
+        
+        const body = document.createElement('div');
+        body.className = 'accordion-body hidden';
+        body.innerHTML = generateRoleHelpDetailsHtml(role);
+
+        header.onclick = () => {
+            const isHidden = body.classList.contains('hidden');
+            document.querySelectorAll('.accordion-body').forEach(b => b.classList.add('hidden'));
+            document.querySelectorAll('.accordion-header').forEach(h => h.classList.remove('active'));
+            if (isHidden) {
+                body.classList.remove('hidden');
+                header.classList.add('active');
+            }
+        };
+
+        item.appendChild(header);
+        item.appendChild(body);
+        accordion.appendChild(item);
+    });
+}
+
+/**
+ * 役職説明モーダルを閉じる
+ */
+function closeHelpModal() {
+    const modal = document.getElementById('help-modal');
+    modal.classList.add('hidden');
+}
+
+/**
+ * GM設定用：特定の役職のみのポップアップ説明表示
+ */
+function showRoleInfoModal(roleId) {
+    const role = ROLES_INFO.find(r => r.id === roleId);
+    if (!role) return;
+
+    const modal = document.getElementById('help-modal');
+    modal.classList.remove('hidden');
+
+    // 自分の役職説明エリアを非表示にする
+    document.getElementById('my-role-help-area').classList.add('hidden');
+
+    // 全役職リストのアコーディオンを描画
+    const accordion = document.getElementById('all-roles-accordion');
+    accordion.innerHTML = '';
+
+    ROLES_INFO.forEach(r => {
+        const item = document.createElement('div');
+        item.className = 'accordion-item';
+
+        const header = document.createElement('div');
+        header.className = 'accordion-header';
+        header.innerHTML = `<span>${r.name}</span> <span class="accordion-badge ${ROLE_BADGE_CLASS[r.name]}">${r.faction}</span>`;
+        
+        const body = document.createElement('div');
+        body.className = 'accordion-body';
+        if (r.id !== roleId) {
+            body.classList.add('hidden');
+        } else {
+            header.classList.add('active');
+        }
+        body.innerHTML = generateRoleHelpDetailsHtml(r);
+
+        header.onclick = () => {
+            const isHidden = body.classList.contains('hidden');
+            document.querySelectorAll('.accordion-body').forEach(b => b.classList.add('hidden'));
+            document.querySelectorAll('.accordion-header').forEach(h => h.classList.remove('active'));
+            if (isHidden) {
+                body.classList.remove('hidden');
+                header.classList.add('active');
+            }
+        };
+
+        item.appendChild(header);
+        item.appendChild(body);
+        accordion.appendChild(item);
+    });
+}
+
+function generateRoleHelpHtml(role) {
+    return `
+        <div class="role-help-card">
+            <div class="role-help-badge-row">
+                <span class="role-badge-large ${ROLE_BADGE_CLASS[role.name]}">${role.name}</span>
+                <span class="faction-badge">${role.faction}</span>
+            </div>
+            <p class="role-help-summary"><strong>概要:</strong> ${role.summary}</p>
+            <p class="role-help-details"><strong>詳細仕様:</strong> ${role.details}</p>
+            <p class="role-help-win"><strong>勝利条件:</strong> ${role.win_condition}</p>
+        </div>
+    `;
+}
+
+function generateRoleHelpDetailsHtml(role) {
+    return `
+        <div class="role-help-body-content">
+            <p><strong>概要:</strong> ${role.summary}</p>
+            <p><strong>詳細仕様:</strong> ${role.details}</p>
+            <p><strong>勝利条件:</strong> ${role.win_condition}</p>
+        </div>
+    `;
+}
 
 // =============================================
 // 初期化

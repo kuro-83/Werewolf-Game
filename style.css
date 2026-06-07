@@ -1081,3 +1081,227 @@ body.theme-result-teruteru {
     50% { transform: scale(1.05); opacity: 1; }
 }
 
+
+/* --------- ヘルプモーダル・ルールブック --------- */
+
+/* 📖 役職・ルール確認ボタン */
+.help-rules-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--accent);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.help-rules-btn:hover {
+    background: var(--accent);
+    color: #111;
+    box-shadow: 0 0 10px rgba(187, 154, 247, 0.3);
+}
+
+/* モーダルオーバーレイ */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(10, 10, 15, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 20000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* モーダルコンテンツ */
+.modal-content {
+    background: rgba(20, 20, 30, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    width: 90%;
+    max-width: 460px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 2rem;
+    position: relative;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    animation: popIn 0.3s ease-out;
+}
+
+/* 閉じるボタン */
+.modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1.5rem;
+    font-size: 2rem;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.modal-close:hover {
+    color: #f7768e;
+}
+
+.modal-title {
+    margin: 0 0 1.5rem 0;
+    font-size: 1.4rem;
+    text-align: center;
+    color: #c0caf5;
+}
+
+/* 自分の役職説明 */
+.my-role-help {
+    background: rgba(187, 154, 247, 0.08);
+    border: 1px solid rgba(187, 154, 247, 0.2);
+    border-radius: 16px;
+    padding: 1.2rem;
+    margin-bottom: 2rem;
+    text-align: left;
+}
+
+.my-role-help h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1.05rem;
+    color: var(--accent);
+}
+
+.role-help-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.role-help-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-bottom: 0.4rem;
+}
+
+.role-badge-large {
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    font-weight: 900;
+    font-size: 1rem;
+}
+
+.faction-badge {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #c0caf5;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.8rem;
+    border-radius: 8px;
+    font-weight: 700;
+}
+
+.role-help-summary, .role-help-details, .role-help-win {
+    font-size: 0.9rem;
+    margin: 0;
+    line-height: 1.4;
+    color: #a9b1d6;
+}
+
+.role-help-summary strong, .role-help-details strong, .role-help-win strong {
+    color: #c0caf5;
+}
+
+/* アコーディオン */
+.all-roles-help h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1.05rem;
+    color: #c0caf5;
+    opacity: 0.8;
+    text-align: left;
+}
+
+.accordion-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.accordion-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.accordion-header {
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 700;
+    transition: background 0.2s;
+    user-select: none;
+}
+
+.accordion-header:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.accordion-header.active {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.accordion-badge {
+    padding: 0.2rem 0.6rem;
+    font-size: 0.75rem;
+    border-radius: 20px;
+    font-weight: 700;
+}
+
+.accordion-body {
+    padding: 1.2rem;
+    text-align: left;
+    background: rgba(0, 0, 0, 0.15);
+    animation: fadeIn 0.2s ease;
+}
+
+.role-help-body-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.role-help-body-content p {
+    font-size: 0.85rem;
+    margin: 0;
+    line-height: 1.4;
+    color: #a9b1d6;
+}
+
+.role-help-body-content p strong {
+    color: #c0caf5;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* GM用ℹ️ボタン */
+.info-icon-btn {
+    transition: transform 0.2s;
+}
+
+.info-icon-btn:hover {
+    transform: scale(1.2);
+    filter: brightness(1.2);
+}
+

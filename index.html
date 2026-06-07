@@ -38,6 +38,10 @@
                 <h2>現在のフェーズ</h2>
                 <div id="current-phase" class="phase-badge">読込中...</div>
 
+                <div style="margin-top: 0.5rem; text-align: center;">
+                    <button type="button" id="btn-help-rules" class="help-rules-btn" onclick="openHelpModal()">📖 役職・ルール確認</button>
+                </div>
+
                 <!-- プレイヤー：あなたの役職表示 -->
                 <div id="my-role-area" class="my-role-display hidden">
                     <div class="my-role-title">あなたの役職</div>
@@ -258,6 +262,28 @@
             <button id="btn-return-lobby" class="btn-return-lobby hidden" onclick="resetGame()">
                 🏠 ロビーに戻る
             </button>
+        </div>
+    </div>
+
+    <!-- ======================================
+         役職・ルール確認モーダル
+         ====================================== -->
+    <div id="help-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeHelpModal()">&times;</span>
+            <h2 class="modal-title">📖 役職・ルール確認</h2>
+            
+            <!-- 自分の役職説明エリア -->
+            <div id="my-role-help-area" class="my-role-help">
+                <h3>あなたの役職の能力</h3>
+                <div id="my-role-help-content"></div>
+            </div>
+            
+            <!-- 全役職一覧アコーディオン -->
+            <div class="all-roles-help">
+                <h3>ゲームの全役職一覧</h3>
+                <div id="all-roles-accordion" class="accordion-list"></div>
+            </div>
         </div>
     </div>
 
