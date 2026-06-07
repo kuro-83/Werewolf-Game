@@ -79,6 +79,16 @@ body.theme-result-wolf {
     --border-color: rgba(247, 118, 142, 0.3);
 }
 
+/* リザルト：てるてる勝利テーマ */
+body.theme-result-teruteru {
+    --bg-gradient-start: #4a2f0f;
+    --bg-gradient-end: #1f0f05;
+    --text-color: #ffebd1;
+    --card-bg: rgba(60, 30, 10, 0.75);
+    --accent: #ffc777;
+    --border-color: rgba(255, 199, 119, 0.3);
+}
+
 /* --------- レイアウト --------- */
 .container {
     width: 90%;
@@ -613,6 +623,11 @@ body.theme-result-wolf {
     background: radial-gradient(ellipse at 50% 30%, rgba(247, 118, 142, 0.25) 0%, rgba(10, 0, 0, 0.97) 70%);
 }
 
+/* てるてる勝利：オレンジ・黄系の背景 */
+.result-overlay.teruteru-win {
+    background: radial-gradient(ellipse at 50% 30%, rgba(255, 199, 119, 0.25) 0%, rgba(30, 15, 5, 0.97) 70%);
+}
+
 .result-content {
     width: 90%;
     max-width: 480px;
@@ -644,6 +659,11 @@ body.theme-result-wolf {
 /* 人狼勝利タイトル */
 .result-title.wolf {
     color: #f7768e;
+}
+
+/* てるてる勝利タイトル */
+.result-title.teruteru {
+    color: #ffc777;
 }
 
 .result-subtitle {

@@ -301,9 +301,16 @@ async function updatePhaseDisplay(phase) {
                                 `;
                             }
                         } else {
-                            document.getElementById('night-waiting').innerHTML = `
-                                <h2>夜が訪れました</h2><p style="color:#c0caf5;">人狼が暗躍しています。<br>静かに朝を待ちましょう…</p>
-                            `;
+                            if (myRoleName === 'てるてる') {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>夜が訪れました</h2>
+                                    <p style="color:#c0caf5;">あなたは <span style="color:#ffc777; font-weight:bold;">てるてる</span> です。夜のアクションはありません。<br>昼の投票で追放されるよう、静かに朝を待ちましょう…</p>
+                                `;
+                            } else {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>夜が訪れました</h2><p style="color:#c0caf5;">人狼が暗躍しています。<br>静かに朝を待ちましょう…</p>
+                                `;
+                            }
                         }
                     }
                 } else {
@@ -392,7 +399,7 @@ function renderPlayerList() {
 // =============================================
 function checkWinCondition() {
     if (myRoleType !== 'gm') return;
-    if (lastKnownPhase === 'waiting' || lastKnownPhase === 'result') return;
+    if (lastKnownPhase === 'waiting' || lastKnownPhase === 'result' || resultShown) return;
 
     const playersWithRole = currentPlayers.filter(p => p.role);
     if (playersWithRole.length === 0) return;
@@ -473,26 +480,45 @@ async function showResultScreen() {
     }
 
     const isCitizen = winner === 'citizen';
+    const isWolf = winner === 'wolf';
+    const isTeruteru = winner === 'teruteru' || winner === 'てるてる';
 
-    if (isCitizen) {
+    if (isTeruteru) {
+        document.body.className = 'theme-result-teruteru';
+        overlay.classList.add('teruteru-win');
+        overlay.classList.remove('citizen-win', 'wolf-win');
+    } else if (isCitizen) {
         document.body.className = 'theme-result-citizen';
         overlay.classList.add('citizen-win');
-        overlay.classList.remove('wolf-win');
+        overlay.classList.remove('wolf-win', 'teruteru-win');
     } else {
         document.body.className = 'theme-result-wolf';
         overlay.classList.add('wolf-win');
-        overlay.classList.remove('citizen-win');
+        overlay.classList.remove('citizen-win', 'teruteru-win');
     }
 
-    document.getElementById('result-icon').textContent = isCitizen ? '☀️' : '🐺';
+    if (isTeruteru) {
+        document.getElementById('result-icon').textContent = '🎈';
+    } else {
+        document.getElementById('result-icon').textContent = isCitizen ? '☀️' : '🐺';
+    }
 
     const titleEl = document.getElementById('result-title');
-    titleEl.className = `result-title ${isCitizen ? 'citizen' : 'wolf'}`;
-    titleEl.textContent = isCitizen ? '市民チームの勝利！' : '人狼チームの勝利！';
+    if (isTeruteru) {
+        titleEl.className = 'result-title teruteru';
+        titleEl.textContent = 'てるてるの単独勝利！';
+    } else {
+        titleEl.className = `result-title ${isCitizen ? 'citizen' : 'wolf'}`;
+        titleEl.textContent = isCitizen ? '市民チームの勝利！' : '人狼チームの勝利！';
+    }
 
-    document.getElementById('result-subtitle').textContent = isCitizen
-        ? '平和が訪れた！'
-        : '村は滅び去った…';
+    if (isTeruteru) {
+        document.getElementById('result-subtitle').textContent = '見事に追放（処刑）されました！';
+    } else {
+        document.getElementById('result-subtitle').textContent = isCitizen
+            ? '平和が訪れた！'
+            : '村は滅び去った…';
+    }
 
     await renderResultPlayerList();
 
@@ -776,6 +802,9 @@ async function countAndExile() {
 
     console.log(`[VOTE] 追放: ${exiledName}`);
 
+    const exiledPlayer = alivePlayers.find(p => p.id === exiledId);
+    const isTeruteruExiled = exiledPlayer && exiledPlayer.role === 'てるてる';
+
     // 追放処理：is_alive を false に
     try {
         const { error } = await supabaseClient
@@ -786,6 +815,15 @@ async function countAndExile() {
     } catch (err) {
         console.error('追放エラー:', err);
         isCountingVotes = false;
+        return;
+    }
+
+    // てるてるが追放された場合、即座にてるてるの単独勝利としてゲーム終了
+    if (isTeruteruExiled) {
+        console.log('[VOTE] てるてるが追放されたため、てるてる単独勝利！');
+        await triggerGameEnd('teruteru');
+        // GMは直接リザルトを表示（他クライアントは is_alive の Realtime イベントから呼ばれる）
+        showVoteResult(exiledName, voteLog);
         return;
     }
 
