@@ -118,13 +118,31 @@
             <h2 style="color: #bb9af7;">🔮 占いターゲット選択</h2>
             <p style="color:#c0caf5;">今夜、誰を占いますか？</p>
             <div id="seer-target-list" class="target-list"></div>
-            <button type="button" id="btn-seer-divinate" class="target-btn" style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#bb9af7,#7aa2f7); display:none;" onclick="submitDivination()">🔮 占う</button>
+            <button type="button" id="btn-seer-divinate" class="target-btn"
+                style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#bb9af7,#7aa2f7); display:none;"
+                onclick="submitDivination()">🔮 占う</button>
         </div>
 
         <!-- 占い結果表示（朝フェーズ・占い師のみ） -->
         <div id="seer-result-area" class="night-content hidden">
             <h2 style="color: #bb9af7;">🔮 占い結果</h2>
             <div id="seer-result-text" style="color:#c0caf5; font-size:1.1rem; margin-top:0.5rem;"></div>
+        </div>
+
+        <!-- 霊媒師用の霊媒画面 -->
+        <div id="night-medium" class="night-content hidden">
+            <h2 style="color: #73daca;">🔮 霊媒ターゲット選択</h2>
+            <p style="color:#c0caf5;">今夜、誰を霊媒しますか？（死亡者から選択）</p>
+            <div id="medium-target-list" class="target-list"></div>
+            <button type="button" id="btn-medium-action" class="target-btn"
+                style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#73daca,#2ac3de); display:none;"
+                onclick="submitMedium()">🔮 霊媒する</button>
+        </div>
+
+        <!-- 霊媒結果表示（朝フェーズ・霊媒師のみ） -->
+        <div id="medium-result-area" class="night-content hidden">
+            <h2 style="color: #73daca;">🔮 霊媒結果</h2>
+            <div id="medium-result-text" style="color:#c0caf5; font-size:1.1rem; margin-top:0.5rem;"></div>
         </div>
     </div>
 

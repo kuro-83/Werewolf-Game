@@ -112,6 +112,7 @@ async function updatePhaseDisplay(phase) {
         document.getElementById('vote-overlay').classList.add('hidden');
         document.getElementById('vote-progress-area').classList.add('hidden');
         document.getElementById('vote-result-overlay').classList.add('hidden');
+        document.getElementById('medium-result-area').classList.add('hidden');
         hasActedTonight = false;
         hasVotedToday = false;
         isCountingVotes = false;
@@ -185,6 +186,12 @@ async function updatePhaseDisplay(phase) {
                 } else {
                     document.getElementById('seer-result-area').classList.add('hidden');
                 }
+                // 霊媒師の場合、霊媒結果を表示
+                if (myRoleName === '霊媒師') {
+                    await showMediumResult();
+                } else {
+                    document.getElementById('medium-result-area').classList.add('hidden');
+                }
 
             } else if (phase === 'night') {
                 // ── 夜フェーズ ──
@@ -194,6 +201,7 @@ async function updatePhaseDisplay(phase) {
                 document.getElementById('vote-result-overlay').classList.add('hidden');
                 // 占い結果エリアを隠す（夜フェーズ開始時）
                 document.getElementById('seer-result-area').classList.add('hidden');
+                document.getElementById('medium-result-area').classList.add('hidden');
 
                 if (isMeAlive) {
                     document.getElementById('night-action-overlay').classList.remove('hidden');
@@ -201,17 +209,27 @@ async function updatePhaseDisplay(phase) {
                     if (myRoleName === '人狼' && !hasActedTonight) {
                         document.getElementById('night-wolf').classList.remove('hidden');
                         document.getElementById('night-seer').classList.add('hidden');
+                        document.getElementById('night-medium').classList.add('hidden');
                         document.getElementById('night-waiting').classList.add('hidden');
                         renderWolfTargets();
                     } else if (myRoleName === '預言者' && !hasActedTonight) {
                         // ── 占い師の夜アクション ──
                         document.getElementById('night-wolf').classList.add('hidden');
+                        document.getElementById('night-medium').classList.add('hidden');
                         document.getElementById('night-waiting').classList.add('hidden');
                         document.getElementById('night-seer').classList.remove('hidden');
                         renderSeerTargets();
+                    } else if (myRoleName === '霊媒師' && !hasActedTonight) {
+                        // ── 霊媒師の夜アクション ──
+                        document.getElementById('night-wolf').classList.add('hidden');
+                        document.getElementById('night-seer').classList.add('hidden');
+                        document.getElementById('night-waiting').classList.add('hidden');
+                        document.getElementById('night-medium').classList.remove('hidden');
+                        renderMediumTargets();
                     } else {
                         document.getElementById('night-wolf').classList.add('hidden');
                         document.getElementById('night-seer').classList.add('hidden');
+                        document.getElementById('night-medium').classList.add('hidden');
                         document.getElementById('night-waiting').classList.remove('hidden');
                         if (hasActedTonight) {
                             if (myRoleName === '人狼') {
@@ -221,6 +239,10 @@ async function updatePhaseDisplay(phase) {
                             } else if (myRoleName === '預言者') {
                                 document.getElementById('night-waiting').innerHTML = `
                                     <h2>🔮 占い完了</h2><p style="color:#c0caf5;">占い完了。朝を待っています...</p>
+                                `;
+                            } else if (myRoleName === '霊媒師') {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>🔮 霊媒完了</h2><p style="color:#c0caf5;">霊媒完了。朝を待っています...</p>
                                 `;
                             } else {
                                 document.getElementById('night-waiting').innerHTML = `
@@ -242,6 +264,7 @@ async function updatePhaseDisplay(phase) {
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('night-action-overlay').classList.add('hidden');
                 document.getElementById('seer-result-area').classList.add('hidden');
+                document.getElementById('medium-result-area').classList.add('hidden');
                 hasActedTonight = false;
             }
         }
@@ -859,6 +882,35 @@ async function proceedToNight() {
             console.warn('[SEER] 占い集計に失敗しましたが、フェーズ移行は続行します:', seerCalcErr);
         }
 
+        // ── 霊媒師の集計（フェーズ移行前に実行）──
+        try {
+            const { data: mediumData, error: mediumErr } = await supabaseClient
+                .from('players')
+                .select('id, name, night_target_id')
+                .eq('role', '霊媒師')
+                .eq('is_alive', true)
+                .maybeSingle();
+
+            if (!mediumErr && mediumData && mediumData.night_target_id) {
+                const { data: targetData, error: targetErr } = await supabaseClient
+                    .from('players')
+                    .select('role')
+                    .eq('id', mediumData.night_target_id)
+                    .maybeSingle();
+
+                if (!targetErr && targetData) {
+                    const result = targetData.role === '人狼' ? '人狼' : '人間';
+                    await supabaseClient
+                        .from('players')
+                        .update({ night_result: result })
+                        .eq('id', mediumData.id);
+                    console.log(`[MEDIUM] 霊媒結果: ${result} (target_id: ${mediumData.night_target_id})`);
+                }
+            }
+        } catch (mediumCalcErr) {
+            console.warn('[MEDIUM] 霊媒集計に失敗しましたが、フェーズ移行は続行します:', mediumCalcErr);
+        }
+
         // 全員の vote_target_id を NULL にリセット
         const { error: resetError } = await supabaseClient
             .from('players')
@@ -993,6 +1045,122 @@ async function showSeerResult() {
         }
     } catch (err) {
         console.warn('[SEER] 占い結果取得エラー:', err);
+        resultArea.classList.add('hidden');
+    }
+}
+
+
+// =============================================
+// 霊媒師専用処理
+// =============================================
+
+/**
+ * 霊媒ターゲット選択ボタンを描画（死者のみ対象）
+ */
+let selectedMediumTargetId = null;
+let selectedMediumTargetName = null;
+
+function renderMediumTargets() {
+    const list = document.getElementById('medium-target-list');
+    list.innerHTML = '';
+    selectedMediumTargetId = null;
+    selectedMediumTargetName = null;
+    const btn = document.getElementById('btn-medium-action');
+    btn.style.display = 'none';
+    btn.disabled = false;
+
+    // 死亡しているプレイヤーのみを対象にする
+    const targets = currentPlayers.filter(p => !p.is_alive);
+
+    if (targets.length === 0) {
+        list.innerHTML = '<p style="color:#888;">霊媒できる死者がいません</p>';
+        return;
+    }
+
+    targets.forEach(t => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'target-btn';
+        b.textContent = t.name;
+        b.dataset.id = t.id;
+        b.onclick = () => {
+            document.querySelectorAll('#medium-target-list .target-btn').forEach(x => x.classList.remove('selected'));
+            b.classList.add('selected');
+            selectedMediumTargetId = t.id;
+            selectedMediumTargetName = t.name;
+            btn.style.display = '';
+        };
+        list.appendChild(b);
+    });
+}
+
+/**
+ * 霊媒送信
+ */
+async function submitMedium() {
+    if (!selectedMediumTargetId) {
+        alert('霊媒するプレイヤーを選んでください');
+        return;
+    }
+    if (!confirm(`${selectedMediumTargetName} さんを霊媒しますか？`)) return;
+
+    const btn = document.getElementById('btn-medium-action');
+    btn.disabled = true;
+
+    try {
+        const { error } = await supabaseClient
+            .from('players')
+            .update({ night_target_id: selectedMediumTargetId })
+            .eq('name', myPlayerName);
+
+        if (error) throw error;
+
+        hasActedTonight = true;
+        document.getElementById('night-medium').classList.add('hidden');
+        document.getElementById('night-waiting').classList.remove('hidden');
+        document.getElementById('night-waiting').innerHTML = `
+            <h2>🔮 霊媒完了</h2><p style="color:#c0caf5;">霊媒完了。朝を待っています...</p>
+        `;
+    } catch (err) {
+        console.error('霊媒エラー:', err);
+        alert('霊媒の送信に失敗しました。');
+        btn.disabled = false;
+    }
+}
+
+/**
+ * 朝フェーズ：霊媒師自身の night_result を取得して表示
+ */
+async function showMediumResult() {
+    const resultArea = document.getElementById('medium-result-area');
+    const resultText = document.getElementById('medium-result-text');
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('players')
+            .select('night_result, night_target_id')
+            .eq('name', myPlayerName)
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (data && data.night_result && data.night_target_id) {
+            // ターゲット名を currentPlayers から引く（死者も含む）
+            const target = currentPlayers.find(p => p.id === data.night_target_id);
+            const targetName = target ? target.name : '不明';
+            const resultLabel = data.night_result === '人狼'
+                ? '<span style="color:#f7768e; font-weight:bold;">【人狼】</span>'
+                : '<span style="color:#9ece6a; font-weight:bold;">【人間】</span>';
+            resultText.innerHTML = `🔮 霊媒結果: 「${targetName}」さんは ${resultLabel} でした`;
+            resultArea.classList.remove('hidden');
+            // night-action-overlay も表示して見えるようにする
+            document.getElementById('night-action-overlay').classList.remove('hidden');
+        } else {
+            // 霊媒結果がまだない場合は非表示
+            resultArea.classList.add('hidden');
+        }
+    } catch (err) {
+        console.warn('[MEDIUM] 霊媒結果取得エラー:', err);
         resultArea.classList.add('hidden');
     }
 }
@@ -1162,8 +1330,9 @@ async function handlePhaseChange(newPhase) {
         hasVotedToday = false;
         isCountingVotes = false;
     }
-    // 夜フェーズから朝（discussion）へ直接移行する場合：占い師の結果を集計
+    // 夜フェーズから朝（discussion）へ直接移行する場合：占い師・霊媒師の結果を集計
     if (lastKnownPhase === 'night' && newPhase === 'discussion') {
+        // 占い師の集計
         try {
             const { data: seerData, error: seerErr } = await supabaseClient
                 .from('players')
@@ -1190,6 +1359,34 @@ async function handlePhaseChange(newPhase) {
             }
         } catch (seerErr) {
             console.warn('[SEER] handlePhaseChange 占い集計スキップ:', seerErr);
+        }
+        // 霊媒師の集計
+        try {
+            const { data: mediumData, error: mediumErr } = await supabaseClient
+                .from('players')
+                .select('id, name, night_target_id')
+                .eq('role', '霊媒師')
+                .eq('is_alive', true)
+                .maybeSingle();
+
+            if (!mediumErr && mediumData && mediumData.night_target_id) {
+                const { data: targetData, error: targetErr } = await supabaseClient
+                    .from('players')
+                    .select('role')
+                    .eq('id', mediumData.night_target_id)
+                    .maybeSingle();
+
+                if (!targetErr && targetData) {
+                    const result = targetData.role === '人狼' ? '人狼' : '人間';
+                    await supabaseClient
+                        .from('players')
+                        .update({ night_result: result })
+                        .eq('id', mediumData.id);
+                    console.log(`[MEDIUM] handlePhaseChange 霊媒結果: ${result}`);
+                }
+            }
+        } catch (mediumErr) {
+            console.warn('[MEDIUM] handlePhaseChange 霊媒集計スキップ:', mediumErr);
         }
     }
     try {
