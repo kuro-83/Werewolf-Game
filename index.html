@@ -12,6 +12,8 @@
 
 <body class="theme-waiting">
     <div class="particles"></div>
+    
+    <!-- ログイン用のコンテナ -->
     <div class="container">
         <!-- ログイン画面 -->
         <div id="login-view" class="card login-card">
@@ -29,17 +31,32 @@
                     style="background:transparent; border:none; color:rgba(255,255,255,0.4); text-decoration:underline; cursor:pointer;">ログイン情報をリセット</button>
             </div>
         </div>
+    </div>
 
-        <!-- メインゲーム画面 -->
-        <div id="game-view" class="hidden">
+    <!-- メインゲーム画面（containerの外へ配置して3カラム化） -->
+    <div id="game-view" class="hidden game-layout">
+        <!-- 左サイドバー：考察メモ -->
+        <aside id="left-sidebar" class="sidebar left-sidebar">
+            <div class="sidebar-header">
+                <h3>📝 考察メモ (プライベート)</h3>
+                <button type="button" id="btn-close-memo" class="close-memo-btn" onclick="toggleMobileMemo()">&times;</button>
+            </div>
+            <div id="memo-player-list" class="memo-player-list">
+                <!-- JSでプレイヤー一覧とメモ入力欄が動的に生成されます -->
+            </div>
+        </aside>
+
+        <!-- 中央：メインコンテンツ -->
+        <div class="main-content">
             <header class="card phase-display">
                 <div id="gm-name-display" class="gm-badge hidden">GM: 〇〇さん</div>
 
                 <h2>現在のフェーズ</h2>
                 <div id="current-phase" class="phase-badge">読込中...</div>
 
-                <div style="margin-top: 0.5rem; text-align: center;">
+                <div style="margin-top: 0.5rem; text-align: center; display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
                     <button type="button" id="btn-help-rules" class="help-rules-btn" onclick="openHelpModal()">📖 役職・ルール確認</button>
+                    <button type="button" id="btn-toggle-memo" class="toggle-memo-btn" onclick="toggleMobileMemo()">📝 メモ</button>
                 </div>
 
                 <!-- プレイヤー：あなたの役職表示 -->
@@ -109,6 +126,14 @@
                 </div>
             </main>
         </div>
+
+        <!-- 右サイドバー：将来の拡張用スペース -->
+        <aside id="right-sidebar" class="sidebar right-sidebar">
+            <div class="sidebar-placeholder">
+                <h4>拡張スペース</h4>
+                <p>（将来の機能追加用）</p>
+            </div>
+        </aside>
     </div>
 
     <!-- ======================================

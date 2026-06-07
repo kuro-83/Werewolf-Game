@@ -120,6 +120,12 @@ const ROLE_BADGE_CLASS = {
 // UI と状態の更新
 // =============================================
 async function updatePhaseDisplay(phase) {
+    // フェーズ変更時にスマホ用メモドロワーが開いていたら閉じる
+    const sidebar = document.getElementById('left-sidebar');
+    if (sidebar && sidebar.classList.contains('show-mobile')) {
+        toggleMobileMemo();
+    }
+
     lastKnownPhase = phase;
     const displayName = phaseNames[phase] || phase;
 
@@ -192,7 +198,7 @@ async function updatePhaseDisplay(phase) {
             playerListArea.classList.remove('hidden');
             document.getElementById('btn-waiting').classList.add('hidden');
             document.getElementById('reset-area').classList.remove('hidden');
-            // 夢フェーズ中のみ「朝フェーズへ進む」ボタンを表示
+            // 夜フェーズ中のみ「朝フェーズへ進む」ボタンを表示
             if (phase === 'night') {
                 document.getElementById('morning-start-area').classList.remove('hidden');
             } else {
@@ -433,6 +439,127 @@ function renderPlayerList() {
 
     currentPlayersCount = currentPlayers.length;
     updateTotalInfo();
+}
+
+/**
+ * 考察メモ（プライベートメモ）一覧を描画
+ * 入力中のフォーカスを失わないよう、DOMの差分更新を行う
+ */
+function renderMemoList() {
+    const memoPlayerList = document.getElementById('memo-player-list');
+    if (!memoPlayerList) return;
+
+    // ログイン中の自分のプレイヤー情報を探索してIDを取得
+    const myPlayer = currentPlayers.find(p => p.name === myPlayerName);
+    const myPlayerId = myPlayer ? myPlayer.id : null;
+
+    // 自分自身の情報が取得できるまで待機（初期ロード対策）
+    if (!myPlayerId) {
+        memoPlayerList.innerHTML = '<div style="color:rgba(255,255,255,0.4); text-align:center; padding:1rem; font-size:0.85rem;">プレイヤー情報取得中...</div>';
+        return;
+    }
+
+    // すでに「情報取得中」等のテキストがある場合はクリア
+    if (memoPlayerList.children.length === 1 && memoPlayerList.firstElementChild.id === '') {
+        memoPlayerList.innerHTML = '';
+    }
+
+    const aliveIds = new Set(currentPlayers.map(p => p.id));
+
+    // 1. 存在しなくなったプレイヤーのメモ要素を削除
+    const existingItems = memoPlayerList.querySelectorAll('.memo-item');
+    existingItems.forEach(item => {
+        const id = item.dataset.playerId;
+        if (!aliveIds.has(id)) {
+            item.remove();
+        }
+    });
+
+    // 2. プレイヤーごとに要素を作成または更新
+    currentPlayers.forEach(p => {
+        const targetPlayerId = p.id;
+        const key = `werewolf_memo_1_${myPlayerId}_${targetPlayerId}`;
+        
+        let itemEl = document.getElementById(`memo-item-${targetPlayerId}`);
+        let textarea = null;
+
+        if (!itemEl) {
+            // 新規作成
+            itemEl = document.createElement('div');
+            itemEl.id = `memo-item-${targetPlayerId}`;
+            itemEl.dataset.playerId = targetPlayerId;
+            itemEl.className = 'memo-item';
+            
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'memo-player-name';
+            nameDiv.textContent = p.name;
+            itemEl.appendChild(nameDiv);
+
+            textarea = document.createElement('textarea');
+            textarea.className = 'memo-textarea';
+            textarea.placeholder = `${p.name} さんの考察メモ...`;
+            textarea.value = localStorage.getItem(key) || '';
+            
+            // 入力時に自動保存
+            textarea.addEventListener('input', (e) => {
+                localStorage.setItem(key, e.target.value);
+            });
+
+            itemEl.appendChild(textarea);
+        } else {
+            // 既存更新（テキストエリアは維持し、名前と状態クラスのみ更新）
+            const nameDiv = itemEl.querySelector('.memo-player-name');
+            if (nameDiv && nameDiv.textContent !== p.name) {
+                nameDiv.textContent = p.name;
+            }
+        }
+
+        // 生死状態のクラスを更新
+        if (p.is_alive) {
+            itemEl.classList.remove('dead');
+        } else {
+            itemEl.classList.add('dead');
+        }
+
+        // DOMの末尾に追加（すでに存在する場合は単に順序が末尾に移動されるだけで、フォーカスは維持される）
+        memoPlayerList.appendChild(itemEl);
+    });
+}
+
+/**
+ * スマホ用メモドロワー（左サイドバー）の表示・非表示を切り替える
+ */
+function toggleMobileMemo() {
+    const sidebar = document.getElementById('left-sidebar');
+    if (!sidebar) return;
+    
+    const isShowing = sidebar.classList.toggle('show-mobile');
+    
+    // 背面の暗幕オーバーレイの制御
+    let overlay = document.getElementById('memo-mobile-overlay');
+    if (isShowing) {
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'memo-mobile-overlay';
+            overlay.className = 'memo-mobile-overlay';
+            overlay.onclick = () => toggleMobileMemo(); // 暗幕タップで閉じる
+            document.body.appendChild(overlay);
+        }
+        overlay.classList.remove('hidden');
+        overlay.style.opacity = '0';
+        void overlay.offsetWidth; // リフローを強制してトランジションを効かせる
+        overlay.style.opacity = '1';
+    } else {
+        if (overlay) {
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                // アニメーション完了時にまだ閉じられている場合のみ隠す
+                if (!sidebar.classList.contains('show-mobile') && overlay) {
+                    overlay.classList.add('hidden');
+                }
+            }, 300);
+        }
+    }
 }
 
 
@@ -764,9 +891,6 @@ async function closeVoting() {
 }
 
 /**
- * 集計と追放処理（GMのみ実行）
- */
-/**
  * 投票UIを即座に無効化（締め切り後の後入り投票防止）
  */
 function disableVoteButtons() {
@@ -984,7 +1108,6 @@ async function proceedToNight() {
 
     try {
         // ── 占い師の集計（フェーズ移行前に実行）──
-        // 占い師のnight_target_idを取得して、ターゲットの役職を確認し night_result を保存
         try {
             const { data: seerData, error: seerErr } = await supabaseClient
                 .from('players')
@@ -1051,7 +1174,6 @@ async function proceedToNight() {
         if (resetError) throw resetError;
 
         // 全員の night_target_id ・ night_result を NULL にリセット
-        // （占い師・霊媒師が2ターン目以降に再度アクションできるようにする）
         const { error: nightResetError } = await supabaseClient
             .from('players')
             .update({ night_target_id: null, night_result: null })
@@ -1078,10 +1200,6 @@ async function proceedToNight() {
 // =============================================
 // 占い師（預言者）専用処理
 // =============================================
-
-/**
- * 占いターゲット選択ボタンを描画（ラジオ式）
- */
 let selectedSeerTargetId = null;
 let selectedSeerTargetName = null;
 
@@ -1103,12 +1221,11 @@ function renderSeerTargets() {
 
     targets.forEach(t => {
         const b = document.createElement('button');
-        b.type = 'button'; // フォーム送信防止（デフォルトはsubmit）
+        b.type = 'button';
         b.className = 'target-btn';
         b.textContent = t.name;
         b.dataset.id = t.id;
         b.onclick = () => {
-            // 選択状態の切り替え
             document.querySelectorAll('#seer-target-list .target-btn').forEach(x => x.classList.remove('selected'));
             b.classList.add('selected');
             selectedSeerTargetId = t.id;
@@ -1119,9 +1236,6 @@ function renderSeerTargets() {
     });
 }
 
-/**
- * 占い送信
- */
 async function submitDivination() {
     if (!selectedSeerTargetId) {
         alert('占うプレイヤーを選んでください');
@@ -1153,9 +1267,6 @@ async function submitDivination() {
     }
 }
 
-/**
- * 朝フェーズ：占い師自身の night_result を取得して表示
- */
 async function showSeerResult() {
     const resultArea = document.getElementById('seer-result-area');
     const resultText = document.getElementById('seer-result-text');
@@ -1170,7 +1281,6 @@ async function showSeerResult() {
         if (error) throw error;
 
         if (data && data.night_result && data.night_target_id) {
-            // ターゲット名を currentPlayers から引く
             const target = currentPlayers.find(p => p.id === data.night_target_id);
             const targetName = target ? target.name : '不明';
             const resultLabel = data.night_result === '人狼'
@@ -1178,10 +1288,8 @@ async function showSeerResult() {
                 : '<span style="color:#9ece6a; font-weight:bold;">【人間】</span>';
             resultText.innerHTML = `「${targetName}」さんは ${resultLabel} でした`;
             resultArea.classList.remove('hidden');
-            // morning-overlay 内に表示されるので morning-overlay を表示状態にする
             document.getElementById('morning-overlay').classList.remove('hidden');
         } else {
-            // 占い結果がまだない場合（初日など）は非表示のまま
             resultArea.classList.add('hidden');
         }
     } catch (err) {
@@ -1194,10 +1302,6 @@ async function showSeerResult() {
 // =============================================
 // 霊媒師専用処理
 // =============================================
-
-/**
- * 霊媒ターゲット選択ボタンを描画（死者のみ対象）
- */
 let selectedMediumTargetId = null;
 let selectedMediumTargetName = null;
 
@@ -1210,7 +1314,6 @@ function renderMediumTargets() {
     btn.style.display = 'none';
     btn.disabled = false;
 
-    // 死亡しているプレイヤーのみを対象にする
     const targets = currentPlayers.filter(p => !p.is_alive);
 
     if (targets.length === 0) {
@@ -1235,9 +1338,6 @@ function renderMediumTargets() {
     });
 }
 
-/**
- * 霊媒送信
- */
 async function submitMedium() {
     if (!selectedMediumTargetId) {
         alert('霊媒するプレイヤーを選んでください');
@@ -1269,9 +1369,6 @@ async function submitMedium() {
     }
 }
 
-/**
- * 朝フェーズ：霊媒師自身の night_result を取得して表示
- */
 async function showMediumResult() {
     const resultArea = document.getElementById('medium-result-area');
     const resultText = document.getElementById('medium-result-text');
@@ -1286,7 +1383,6 @@ async function showMediumResult() {
         if (error) throw error;
 
         if (data && data.night_result && data.night_target_id) {
-            // ターゲット名を currentPlayers から引く（死者も含む）
             const target = currentPlayers.find(p => p.id === data.night_target_id);
             const targetName = target ? target.name : '不明';
             const resultLabel = data.night_result === '人狼'
@@ -1294,10 +1390,8 @@ async function showMediumResult() {
                 : '<span style="color:#9ece6a; font-weight:bold;">【人間】</span>';
             resultText.innerHTML = `🔮 霊媒結果: 「${targetName}」さんは ${resultLabel} でした`;
             resultArea.classList.remove('hidden');
-            // morning-overlay 内に表示されるので morning-overlay を表示状態にする
             document.getElementById('morning-overlay').classList.remove('hidden');
         } else {
-            // 霊媒結果がまだない場合は非表示
             resultArea.classList.add('hidden');
         }
     } catch (err) {
@@ -1306,24 +1400,17 @@ async function showMediumResult() {
     }
 }
 
-/**
- * 朝フェーズ：昨晩人狼に襲撃された犠牲者を発表
- */
 function showMorningVictims() {
     const textEl = document.getElementById('victim-result-text');
     if (!textEl) return;
 
-    // 生存している人狼の night_target_id を集計
-    // （朝フェーズ中はまだ night_target_id がリセットされずに残っている）
     const wolfTargetIds = currentPlayers
         .filter(p => p.role === '人狼' && p.night_target_id)
         .map(p => p.night_target_id);
 
-    // 重複を排除
     const uniqueVictimIds = [...new Set(wolfTargetIds)];
 
     if (uniqueVictimIds.length > 0) {
-        // ターゲットになったプレイヤーの中で、実際死亡している人（＝騎士に守られなかった人）の名前を取得
         const victims = currentPlayers.filter(p => uniqueVictimIds.includes(p.id) && !p.is_alive);
         if (victims.length > 0) {
             const victimNames = victims.map(v => v.name).join(' さん、');
@@ -1430,7 +1517,6 @@ function renderKnightTargets() {
         btn.disabled = false;
     }
 
-    // 生存しているプレイヤー全員（自分自身も守護対象に含める）
     const targets = currentPlayers.filter(p => p.is_alive);
 
     if (targets.length === 0) {
@@ -1895,6 +1981,7 @@ async function startGameSync() {
 
         currentPlayers = playersRes.data ? playersRes.data : [];
         renderPlayerList();
+        renderMemoList();
 
         if (phaseRes.data.winner) {
             _pendingWinner = phaseRes.data.winner;
@@ -1923,13 +2010,14 @@ async function startGameSync() {
             (payload) => {
                 currentPlayers.push(payload.new);
                 renderPlayerList();
+                renderMemoList();
             }
         )
         // プレイヤー情報の更新（is_alive / vote_target_id 変更）
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players' },
             async (payload) => {
                 const idx = currentPlayers.findIndex(p => p.name === payload.new.name);
-                // 更新前の法態を保存（vote_target_id変化検知に使用）
+                // 更新前の状態を保存（vote_target_id変化検知に使用）
                 const prevPlayer = idx !== -1 ? currentPlayers[idx] : null;
                 const wasAlive = prevPlayer ? prevPlayer.is_alive : true;
                 const justDied = wasAlive && !payload.new.is_alive;
@@ -1940,6 +2028,7 @@ async function startGameSync() {
                     currentPlayers.push(payload.new);
                 }
                 renderPlayerList();
+                renderMemoList();
 
                 // 朝フェーズ中の場合、犠牲者の表示を更新
                 if (lastKnownPhase === 'morning') {
@@ -1972,7 +2061,7 @@ async function startGameSync() {
                 }
 
                 // 自分の night_result が「実際に変化」した場合→ 朝フェーズ中なら結果を再表示
-                // （フェーズ変更イベントと night_result 更新イベントの到着順穏で結果が見えない場合のフォールバック）
+                // （フェーズ変更イベントと night_result 更新イベントの到着順で結果が見えない場合のフォールバック）
                 if (myRoleType === 'player' && payload.new.name === myPlayerName && lastKnownPhase === 'morning') {
                     const prevResult = prevPlayer ? prevPlayer.night_result : undefined;
                     if (payload.new.night_result !== prevResult && payload.new.night_result) {
@@ -1991,6 +2080,7 @@ async function startGameSync() {
             (payload) => {
                 currentPlayers = currentPlayers.filter(p => p.name !== payload.old.name);
                 renderPlayerList();
+                renderMemoList();
             }
         )
         .subscribe();

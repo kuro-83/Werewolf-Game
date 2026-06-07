@@ -1305,3 +1305,283 @@ body.theme-result-teruteru {
     filter: brightness(1.2);
 }
 
+/* =============================================
+   考察メモ・3カラムレイアウト用スタイル
+   ============================================= */
+
+/* 3カラムゲームレイアウト */
+.game-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr 280px;
+    gap: 1.5rem;
+    width: 95%;
+    max-width: 1200px;
+    margin: 0 auto;
+    align-items: start;
+    z-index: 10;
+    padding: 2rem 0;
+    box-sizing: border-box;
+}
+
+/* 中央メインコンテンツ（従来の container と同等の幅制限） */
+.game-layout .main-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+/* サイドバー（ガラスモルフィズム） */
+.sidebar {
+    background: var(--card-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    padding: 1.5rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    color: var(--text-color);
+    max-height: 85vh;
+    overflow-y: auto;
+    transition: all 0.3s ease;
+}
+
+/* サイドバーヘッダー */
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    border-bottom: 1px dashed var(--border-color);
+    padding-bottom: 0.5rem;
+}
+
+.sidebar-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+/* スマホ用閉じるボタン */
+.close-memo-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 1.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 0.5rem;
+    display: none; /* デフォルト非表示 */
+    transition: color 0.2s;
+}
+
+.close-memo-btn:hover {
+    color: #fff;
+}
+
+/* スマホ用メモ開閉ボタン */
+.toggle-memo-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ff9e64;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 0.5rem;
+    display: none; /* デフォルト非表示 */
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.toggle-memo-btn:hover {
+    background: #ff9e64;
+    color: #111;
+    box-shadow: 0 0 10px rgba(255, 158, 100, 0.3);
+}
+
+/* メモプレイヤーリスト */
+.memo-player-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    text-align: left;
+}
+
+/* メモアイテム */
+.memo-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.8rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    transition: opacity 0.3s, background 0.3s;
+}
+
+.memo-player-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #c0caf5;
+}
+
+/* 死亡プレイヤーのメモ装飾 */
+.memo-item.dead {
+    opacity: 0.5;
+    background: rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.02);
+}
+
+.memo-item.dead .memo-player-name {
+    text-decoration: line-through;
+    color: #888;
+}
+
+.memo-item.dead .memo-player-name::after {
+    content: " (死亡)";
+    font-size: 0.75rem;
+    color: #f7768e;
+    text-decoration: none;
+    display: inline-block;
+}
+
+/* メモ用テキストエリア */
+.memo-textarea {
+    width: 100%;
+    min-height: 60px;
+    box-sizing: border-box;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.25);
+    color: #fff;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s, background-color 0.3s;
+    font-family: inherit;
+    line-height: 1.4;
+}
+
+.memo-textarea:focus {
+    border-color: var(--accent);
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 8px rgba(122, 162, 247, 0.3);
+}
+
+/* 右サイドバーのプレースホルダー */
+.right-sidebar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    border: 1px dashed var(--border-color);
+    background: rgba(255, 255, 255, 0.01);
+}
+
+.sidebar-placeholder {
+    text-align: center;
+    opacity: 0.4;
+    user-select: none;
+}
+
+.sidebar-placeholder h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.95rem;
+    color: var(--accent);
+}
+
+.sidebar-placeholder p {
+    font-size: 0.75rem;
+    margin: 0;
+}
+
+/* =============================================
+   レスポンシブデザイン（サイドバー）
+   ============================================= */
+
+/* タブレットサイズ：右サイドバー非表示、2カラム化 */
+@media (max-width: 991px) {
+    .game-layout {
+        grid-template-columns: 260px 1fr;
+    }
+    .right-sidebar {
+        display: none !important;
+    }
+}
+
+/* スマホサイズ：1カラム、左サイドバーをドロワー(ポップアップ)化 */
+@media (max-width: 768px) {
+    .game-layout {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 1rem 0;
+    }
+    
+    .game-layout .main-content {
+        max-width: 100%;
+        padding: 0 1rem;
+        box-sizing: border-box;
+    }
+
+    /* 左サイドバーを画面外ドロワーに変更 */
+    .left-sidebar {
+        position: fixed;
+        top: 0;
+        left: -320px; /* 画面の左外に隠す */
+        width: 300px;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0 24px 24px 0;
+        z-index: 21000; /* ヘルプモーダル(20000)より手前に配置 */
+        box-sizing: border-box;
+        transition: left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        box-shadow: 5px 0 25px rgba(0, 0, 0, 0.6);
+        background: rgba(20, 20, 30, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-right: 1px solid var(--border-color);
+        border-top: none;
+        border-bottom: none;
+        border-left: none;
+    }
+
+    /* ドロワー表示中のクラス */
+    .left-sidebar.show-mobile {
+        left: 0;
+    }
+
+    /* スマホ表示時は閉じるボタンとトグルボタンを表示 */
+    .close-memo-btn {
+        display: block;
+    }
+
+    .toggle-memo-btn {
+        display: inline-flex !important;
+    }
+    
+    /* ドロワー開閉時の背面タップで閉じるための暗幕オーバーレイが欲しい場合用の定義（JSで制御） */
+    .memo-mobile-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 20500;
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        transition: opacity 0.3s ease;
+    }
+}
