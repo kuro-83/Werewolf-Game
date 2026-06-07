@@ -176,9 +176,15 @@ async function updatePhaseDisplay(phase) {
                 }
 
             } else if (phase === 'discussion') {
-                // ── 議論フェーズ ──
+                // ── 議論フェーズ（朝）──
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('night-action-overlay').classList.add('hidden');
+                // 占い師の場合、占い結果を表示
+                if (myRoleName === '預言者') {
+                    await showSeerResult();
+                } else {
+                    document.getElementById('seer-result-area').classList.add('hidden');
+                }
 
             } else if (phase === 'night') {
                 // ── 夜フェーズ ──
@@ -186,6 +192,8 @@ async function updatePhaseDisplay(phase) {
                 hasVotedToday = false;
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('vote-result-overlay').classList.add('hidden');
+                // 占い結果エリアを隠す（夜フェーズ開始時）
+                document.getElementById('seer-result-area').classList.add('hidden');
 
                 if (isMeAlive) {
                     document.getElementById('night-action-overlay').classList.remove('hidden');
@@ -195,25 +203,30 @@ async function updatePhaseDisplay(phase) {
                         document.getElementById('night-seer').classList.add('hidden');
                         document.getElementById('night-waiting').classList.add('hidden');
                         renderWolfTargets();
-
                     } else if (myRoleName === '預言者' && !hasActedTonight) {
+                        // ── 占い師の夜アクション ──
                         document.getElementById('night-wolf').classList.add('hidden');
-                        document.getElementById('night-seer').classList.remove('hidden');
                         document.getElementById('night-waiting').classList.add('hidden');
+                        document.getElementById('night-seer').classList.remove('hidden');
                         renderSeerTargets();
-
                     } else {
                         document.getElementById('night-wolf').classList.add('hidden');
                         document.getElementById('night-seer').classList.add('hidden');
                         document.getElementById('night-waiting').classList.remove('hidden');
                         if (hasActedTonight) {
-                            const actionLabel = myRoleName === '人狼' ? '襲撃完了' : '占い完了';
-                            const actionMsg = myRoleName === '人狼'
-                                ? '今夜の任務を終えました。<br>静かに朝を待ちましょう…'
-                                : '占いを終えました。<br>静かに朝を待ちましょう…';
-                            document.getElementById('night-waiting').innerHTML = `
-                                <h2>${actionLabel}</h2><p style="color:#c0caf5;">${actionMsg}</p>
-                            `;
+                            if (myRoleName === '人狼') {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>襲撃完了</h2><p style="color:#c0caf5;">今夜の任務を終えました。<br>静かに朝を待ちましょう…</p>
+                                `;
+                            } else if (myRoleName === '預言者') {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>🔮 占い完了</h2><p style="color:#c0caf5;">占い完了。朝を待っています...</p>
+                                `;
+                            } else {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>夜が訪れました</h2><p style="color:#c0caf5;">人狼が暗躍しています。<br>静かに朝を待ちましょう…</p>
+                                `;
+                            }
                         } else {
                             document.getElementById('night-waiting').innerHTML = `
                                 <h2>夜が訪れました</h2><p style="color:#c0caf5;">人狼が暗躍しています。<br>静かに朝を待ちましょう…</p>
@@ -228,6 +241,7 @@ async function updatePhaseDisplay(phase) {
                 // その他のフェーズ
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('night-action-overlay').classList.add('hidden');
+                document.getElementById('seer-result-area').classList.add('hidden');
                 hasActedTonight = false;
             }
         }
@@ -814,6 +828,37 @@ async function proceedToNight() {
     if (myRoleType !== 'gm') return; // GMのみ Supabase を更新
 
     try {
+        // ── 占い師の集計（フェーズ移行前に実行）──
+        // 占い師のnight_target_idを取得して、ターゲットの役職を確認し night_result を保存
+        try {
+            const { data: seerData, error: seerErr } = await supabaseClient
+                .from('players')
+                .select('id, name, night_target_id')
+                .eq('role', '預言者')
+                .eq('is_alive', true)
+                .maybeSingle();
+
+            if (!seerErr && seerData && seerData.night_target_id) {
+                // ターゲットの役職を確認
+                const { data: targetData, error: targetErr } = await supabaseClient
+                    .from('players')
+                    .select('role')
+                    .eq('id', seerData.night_target_id)
+                    .maybeSingle();
+
+                if (!targetErr && targetData) {
+                    const result = targetData.role === '人狼' ? '人狼' : '人間';
+                    await supabaseClient
+                        .from('players')
+                        .update({ night_result: result })
+                        .eq('id', seerData.id);
+                    console.log(`[SEER] 占い結果: ${result} (target_id: ${seerData.night_target_id})`);
+                }
+            }
+        } catch (seerCalcErr) {
+            console.warn('[SEER] 占い集計に失敗しましたが、フェーズ移行は続行します:', seerCalcErr);
+        }
+
         // 全員の vote_target_id を NULL にリセット
         const { error: resetError } = await supabaseClient
             .from('players')
@@ -833,6 +878,122 @@ async function proceedToNight() {
     } catch (err) {
         console.error('夜フェーズ遷移エラー:', err);
         alert('夜フェーズへの遷移に失敗しました。');
+    }
+}
+
+
+// =============================================
+// 占い師（預言者）専用処理
+// =============================================
+
+/**
+ * 占いターゲット選択ボタンを描画（ラジオ式）
+ */
+let selectedSeerTargetId = null;
+let selectedSeerTargetName = null;
+
+function renderSeerTargets() {
+    const list = document.getElementById('seer-target-list');
+    list.innerHTML = '';
+    selectedSeerTargetId = null;
+    selectedSeerTargetName = null;
+    const btn = document.getElementById('btn-seer-divinate');
+    btn.style.display = 'none';
+    btn.disabled = false;
+
+    const targets = currentPlayers.filter(p => p.is_alive && p.name !== myPlayerName);
+
+    if (targets.length === 0) {
+        list.innerHTML = '<p style="color:#888;">占えるプレイヤーがいません</p>';
+        return;
+    }
+
+    targets.forEach(t => {
+        const b = document.createElement('button');
+        b.type = 'button'; // フォーム送信防止（デフォルトはsubmit）
+        b.className = 'target-btn';
+        b.textContent = t.name;
+        b.dataset.id = t.id;
+        b.onclick = () => {
+            // 選択状態の切り替え
+            document.querySelectorAll('#seer-target-list .target-btn').forEach(x => x.classList.remove('selected'));
+            b.classList.add('selected');
+            selectedSeerTargetId = t.id;
+            selectedSeerTargetName = t.name;
+            btn.style.display = '';
+        };
+        list.appendChild(b);
+    });
+}
+
+/**
+ * 占い送信
+ */
+async function submitDivination() {
+    if (!selectedSeerTargetId) {
+        alert('占うプレイヤーを選んでください');
+        return;
+    }
+    if (!confirm(`${selectedSeerTargetName} さんを占いますか？`)) return;
+
+    const btn = document.getElementById('btn-seer-divinate');
+    btn.disabled = true;
+
+    try {
+        const { error } = await supabaseClient
+            .from('players')
+            .update({ night_target_id: selectedSeerTargetId })
+            .eq('name', myPlayerName);
+
+        if (error) throw error;
+
+        hasActedTonight = true;
+        document.getElementById('night-seer').classList.add('hidden');
+        document.getElementById('night-waiting').classList.remove('hidden');
+        document.getElementById('night-waiting').innerHTML = `
+            <h2>🔮 占い完了</h2><p style="color:#c0caf5;">占い完了。朝を待っています...</p>
+        `;
+    } catch (err) {
+        console.error('占いエラー:', err);
+        alert('占いの送信に失敗しました。');
+        btn.disabled = false;
+    }
+}
+
+/**
+ * 朝フェーズ：占い師自身の night_result を取得して表示
+ */
+async function showSeerResult() {
+    const resultArea = document.getElementById('seer-result-area');
+    const resultText = document.getElementById('seer-result-text');
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('players')
+            .select('night_result, night_target_id')
+            .eq('name', myPlayerName)
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (data && data.night_result && data.night_target_id) {
+            // ターゲット名を currentPlayers から引く
+            const target = currentPlayers.find(p => p.id === data.night_target_id);
+            const targetName = target ? target.name : '不明';
+            const resultLabel = data.night_result === '人狼'
+                ? '<span style="color:#f7768e; font-weight:bold;">【人狼】</span>'
+                : '<span style="color:#9ece6a; font-weight:bold;">【人間】</span>';
+            resultText.innerHTML = `「${targetName}」さんは ${resultLabel} でした`;
+            resultArea.classList.remove('hidden');
+            // night-action-overlay も表示して見えるようにする
+            document.getElementById('night-action-overlay').classList.remove('hidden');
+        } else {
+            // 占い結果がまだない場合（初日など）は非表示のまま
+            resultArea.classList.add('hidden');
+        }
+    } catch (err) {
+        console.warn('[SEER] 占い結果取得エラー:', err);
+        resultArea.classList.add('hidden');
     }
 }
 
@@ -858,84 +1019,6 @@ function renderWolfTargets() {
         btn.onclick = () => attackTarget(t.name);
         list.appendChild(btn);
     });
-}
-
-
-// =============================================
-// 夜の占い処理（預言者専用）
-// =============================================
-/**
- * 預言者の占いターゲット一覧を描画する
- * 既存ロジックから完全に独立した外付け関数
- */
-function renderSeerTargets() {
-    const list = document.getElementById('seer-target-list');
-    list.innerHTML = '';
-
-    // 自分以外の生存者をターゲットに
-    const targets = currentPlayers.filter(p => p.is_alive && p.name !== myPlayerName);
-
-    if (targets.length === 0) {
-        list.innerHTML = '<p style="color:#888;">占えるプレイヤーがいません</p>';
-        return;
-    }
-
-    targets.forEach(t => {
-        const btn = document.createElement('button');
-        btn.className = 'target-btn';
-        btn.textContent = t.name;
-        btn.onclick = () => seerDivine(t.id, t.name);
-        list.appendChild(btn);
-    });
-}
-
-/**
- * 預言者が占いを実行する
- * - players テーブルの night_target_id を更新
- * - hasActedTonight を true にセット
- * - 「占い完了」待機画面に切り替え
- * ※ 役職判定・開示ロジックは含まない（ステップ2以降）
- */
-async function seerDivine(targetId, targetName) {
-    if (hasActedTonight) return; // 二重送信防止
-    if (!confirm(`${targetName} さんを占いますか？`)) return;
-
-    // ボタンを即座に無効化（レースコンディション防止）
-    const buttons = document.querySelectorAll('#seer-target-list .target-btn');
-    buttons.forEach(btn => {
-        btn.disabled = true;
-        btn.style.opacity = '0.4';
-        btn.style.cursor = 'not-allowed';
-    });
-
-    try {
-        const { error } = await supabaseClient
-            .from('players')
-            .update({ night_target_id: targetId })
-            .eq('name', myPlayerName);
-
-        if (error) throw error;
-
-        hasActedTonight = true;
-
-        // 占い完了：待機画面に切り替え
-        document.getElementById('night-seer').classList.add('hidden');
-        document.getElementById('night-waiting').classList.remove('hidden');
-        document.getElementById('night-waiting').innerHTML = `
-            <h2>占い完了</h2>
-            <p style="color:#c0caf5;">占いを終えました。<br>静かに朝を待ちましょう…</p>
-        `;
-
-    } catch (err) {
-        console.error('占いエラー:', err);
-        alert('占いに失敗しました。もう一度お試しください。');
-        // エラー時はボタンを再有効化
-        buttons.forEach(btn => {
-            btn.disabled = false;
-            btn.style.opacity = '';
-            btn.style.cursor = '';
-        });
-    }
 }
 
 async function attackTarget(targetName) {
@@ -1079,6 +1162,36 @@ async function handlePhaseChange(newPhase) {
         hasVotedToday = false;
         isCountingVotes = false;
     }
+    // 夜フェーズから朝（discussion）へ直接移行する場合：占い師の結果を集計
+    if (lastKnownPhase === 'night' && newPhase === 'discussion') {
+        try {
+            const { data: seerData, error: seerErr } = await supabaseClient
+                .from('players')
+                .select('id, name, night_target_id')
+                .eq('role', '預言者')
+                .eq('is_alive', true)
+                .maybeSingle();
+
+            if (!seerErr && seerData && seerData.night_target_id) {
+                const { data: targetData, error: targetErr } = await supabaseClient
+                    .from('players')
+                    .select('role')
+                    .eq('id', seerData.night_target_id)
+                    .maybeSingle();
+
+                if (!targetErr && targetData) {
+                    const result = targetData.role === '人狼' ? '人狼' : '人間';
+                    await supabaseClient
+                        .from('players')
+                        .update({ night_result: result })
+                        .eq('id', seerData.id);
+                    console.log(`[SEER] handlePhaseChange 占い結果: ${result}`);
+                }
+            }
+        } catch (seerErr) {
+            console.warn('[SEER] handlePhaseChange 占い集計スキップ:', seerErr);
+        }
+    }
     try {
         const { error } = await supabaseClient
             .from('game_status')
@@ -1108,7 +1221,7 @@ async function resetGame() {
         // 全プレイヤーの role・is_alive・vote_target_id をリセット
         const { error: resetError } = await supabaseClient
             .from('players')
-            .update({ role: null, is_alive: true, vote_target_id: null })
+            .update({ role: null, is_alive: true, vote_target_id: null, night_target_id: null, night_result: null })
             .neq('name', 'dummy_string_for_reset_12345');
         if (resetError) throw resetError;
 
@@ -1280,7 +1393,9 @@ async function startGameSync() {
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players' },
             (payload) => {
                 const idx = currentPlayers.findIndex(p => p.name === payload.new.name);
-                const wasAlive = idx !== -1 ? currentPlayers[idx].is_alive : true;
+                // 更新前の法態を保存（vote_target_id変化検知に使用）
+                const prevPlayer = idx !== -1 ? currentPlayers[idx] : null;
+                const wasAlive = prevPlayer ? prevPlayer.is_alive : true;
                 const justDied = wasAlive && !payload.new.is_alive;
 
                 if (idx !== -1) {
@@ -1305,8 +1420,10 @@ async function startGameSync() {
                     }
                 }
 
-                // vote_target_id が変化 → 投票進捗更新・全員投票チェック
-                if ('vote_target_id' in payload.new) {
+                // vote_target_id が「実際に変化」した場合のみ→ 投票進捗更新・全員投票チェック
+                // (以前は 'vote_target_id' in payload.new だったが、payload.newは常に全カラムを含むため常にtrueになるバグがあった)
+                const oldVoteTargetId = prevPlayer ? prevPlayer.vote_target_id : undefined;
+                if (payload.new.vote_target_id !== oldVoteTargetId) {
                     updateVoteProgress();
                     if (myRoleType === 'gm') {
                         checkAllVoted();

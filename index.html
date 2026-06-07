@@ -113,11 +113,18 @@
             <div id="wolf-target-list" class="target-list"></div>
         </div>
 
-        <!-- 預言者用の占い画面 -->
+        <!-- 占い師用の占い画面 -->
         <div id="night-seer" class="night-content hidden">
-            <h2 style="color: #7dcfff;">🔮 占いターゲット選択</h2>
+            <h2 style="color: #bb9af7;">🔮 占いターゲット選択</h2>
             <p style="color:#c0caf5;">今夜、誰を占いますか？</p>
             <div id="seer-target-list" class="target-list"></div>
+            <button type="button" id="btn-seer-divinate" class="target-btn" style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#bb9af7,#7aa2f7); display:none;" onclick="submitDivination()">🔮 占う</button>
+        </div>
+
+        <!-- 占い結果表示（朝フェーズ・占い師のみ） -->
+        <div id="seer-result-area" class="night-content hidden">
+            <h2 style="color: #bb9af7;">🔮 占い結果</h2>
+            <div id="seer-result-text" style="color:#c0caf5; font-size:1.1rem; margin-top:0.5rem;"></div>
         </div>
     </div>
 
@@ -143,7 +150,7 @@
         <!-- 投票済：待機 -->
         <div id="vote-done" class="night-content hidden">
             <h2>✅ 投票完了</h2>
-            <p style="color:#c0caf5;">他のプレイヤーを待っていますね〜</p>
+            <p style="color:#c0caf5;">他のプレイヤーを待っています…</p>
         </div>
         <!-- 霊界：観戦 -->
         <div id="vote-ghost" class="night-content hidden">
@@ -198,7 +205,7 @@
     <!-- Supabase JS Client (v2) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- アプリケーションロジック -->
-    <script src="app.js?v=2024052601"></script>
+    <script src="app.js?v=2026060702"></script>
 </body>
 
 </html>
