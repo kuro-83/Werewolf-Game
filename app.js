@@ -192,14 +192,27 @@ async function updatePhaseDisplay(phase) {
 
                     if (myRoleName === '人狼' && !hasActedTonight) {
                         document.getElementById('night-wolf').classList.remove('hidden');
+                        document.getElementById('night-seer').classList.add('hidden');
                         document.getElementById('night-waiting').classList.add('hidden');
                         renderWolfTargets();
+
+                    } else if (myRoleName === '預言者' && !hasActedTonight) {
+                        document.getElementById('night-wolf').classList.add('hidden');
+                        document.getElementById('night-seer').classList.remove('hidden');
+                        document.getElementById('night-waiting').classList.add('hidden');
+                        renderSeerTargets();
+
                     } else {
                         document.getElementById('night-wolf').classList.add('hidden');
+                        document.getElementById('night-seer').classList.add('hidden');
                         document.getElementById('night-waiting').classList.remove('hidden');
                         if (hasActedTonight) {
+                            const actionLabel = myRoleName === '人狼' ? '襲撃完了' : '占い完了';
+                            const actionMsg = myRoleName === '人狼'
+                                ? '今夜の任務を終えました。<br>静かに朝を待ちましょう…'
+                                : '占いを終えました。<br>静かに朝を待ちましょう…';
                             document.getElementById('night-waiting').innerHTML = `
-                                <h2>襲撃完了</h2><p style="color:#c0caf5;">今夜の任務を終えました。<br>静かに朝を待ちましょう…</p>
+                                <h2>${actionLabel}</h2><p style="color:#c0caf5;">${actionMsg}</p>
                             `;
                         } else {
                             document.getElementById('night-waiting').innerHTML = `
@@ -845,6 +858,84 @@ function renderWolfTargets() {
         btn.onclick = () => attackTarget(t.name);
         list.appendChild(btn);
     });
+}
+
+
+// =============================================
+// 夜の占い処理（預言者専用）
+// =============================================
+/**
+ * 預言者の占いターゲット一覧を描画する
+ * 既存ロジックから完全に独立した外付け関数
+ */
+function renderSeerTargets() {
+    const list = document.getElementById('seer-target-list');
+    list.innerHTML = '';
+
+    // 自分以外の生存者をターゲットに
+    const targets = currentPlayers.filter(p => p.is_alive && p.name !== myPlayerName);
+
+    if (targets.length === 0) {
+        list.innerHTML = '<p style="color:#888;">占えるプレイヤーがいません</p>';
+        return;
+    }
+
+    targets.forEach(t => {
+        const btn = document.createElement('button');
+        btn.className = 'target-btn';
+        btn.textContent = t.name;
+        btn.onclick = () => seerDivine(t.id, t.name);
+        list.appendChild(btn);
+    });
+}
+
+/**
+ * 預言者が占いを実行する
+ * - players テーブルの night_target_id を更新
+ * - hasActedTonight を true にセット
+ * - 「占い完了」待機画面に切り替え
+ * ※ 役職判定・開示ロジックは含まない（ステップ2以降）
+ */
+async function seerDivine(targetId, targetName) {
+    if (hasActedTonight) return; // 二重送信防止
+    if (!confirm(`${targetName} さんを占いますか？`)) return;
+
+    // ボタンを即座に無効化（レースコンディション防止）
+    const buttons = document.querySelectorAll('#seer-target-list .target-btn');
+    buttons.forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.4';
+        btn.style.cursor = 'not-allowed';
+    });
+
+    try {
+        const { error } = await supabaseClient
+            .from('players')
+            .update({ night_target_id: targetId })
+            .eq('name', myPlayerName);
+
+        if (error) throw error;
+
+        hasActedTonight = true;
+
+        // 占い完了：待機画面に切り替え
+        document.getElementById('night-seer').classList.add('hidden');
+        document.getElementById('night-waiting').classList.remove('hidden');
+        document.getElementById('night-waiting').innerHTML = `
+            <h2>占い完了</h2>
+            <p style="color:#c0caf5;">占いを終えました。<br>静かに朝を待ちましょう…</p>
+        `;
+
+    } catch (err) {
+        console.error('占いエラー:', err);
+        alert('占いに失敗しました。もう一度お試しください。');
+        // エラー時はボタンを再有効化
+        buttons.forEach(btn => {
+            btn.disabled = false;
+            btn.style.opacity = '';
+            btn.style.cursor = '';
+        });
+    }
 }
 
 async function attackTarget(targetName) {
