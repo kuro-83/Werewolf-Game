@@ -198,6 +198,10 @@ async function updatePhaseDisplay(phase) {
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('night-action-overlay').classList.add('hidden');
                 document.getElementById('morning-overlay').classList.remove('hidden');
+                
+                // 昨晩の犠牲者の表示
+                showMorningVictims();
+
                 // 占い師の場合、占い結果を表示
                 if (myRoleName === '預言者') {
                     await showSeerResult();
@@ -1204,38 +1208,94 @@ async function showMediumResult() {
     }
 }
 
+/**
+ * 朝フェーズ：昨晩人狼に襲撃された犠牲者を発表
+ */
+function showMorningVictims() {
+    const textEl = document.getElementById('victim-result-text');
+    if (!textEl) return;
+
+    // 生存している人狼の night_target_id を集計
+    // （朝フェーズ中はまだ night_target_id がリセットされずに残っている）
+    const wolfTargetIds = currentPlayers
+        .filter(p => p.role === '人狼' && p.night_target_id)
+        .map(p => p.night_target_id);
+
+    // 重複を排除
+    const uniqueVictimIds = [...new Set(wolfTargetIds)];
+
+    if (uniqueVictimIds.length > 0) {
+        // ターゲットになったプレイヤーの名前を取得
+        const victims = currentPlayers.filter(p => uniqueVictimIds.includes(p.id));
+        if (victims.length > 0) {
+            const victimNames = victims.map(v => v.name).join(' さん、');
+            textEl.innerHTML = `昨晩の犠牲者は <span style="color:#f7768e; font-weight:bold;">${victimNames} さん</span> でした。`;
+        } else {
+            textEl.innerHTML = '昨晩は誰も死にませんでした。';
+        }
+    } else {
+        textEl.innerHTML = '昨晩は誰も死にませんでした。';
+    }
+}
+
 
 // =============================================
 // 夜の襲撃処理（人狼専用）
 // =============================================
+let selectedWolfTargetId = null;
+let selectedWolfTargetName = null;
+
 function renderWolfTargets() {
     const list = document.getElementById('wolf-target-list');
     list.innerHTML = '';
+    selectedWolfTargetId = null;
+    selectedWolfTargetName = null;
+
+    const btn = document.getElementById('btn-wolf-attack');
+    if (btn) {
+        btn.style.display = 'none';
+        btn.disabled = false;
+    }
 
     const targets = currentPlayers.filter(p => p.is_alive && p.name !== myPlayerName);
 
     if (targets.length === 0) {
-        list.innerHTML = '<p style="color:#888;">襲撃できるターゲットがいません</p>';
+        list.innerHTML = '<p style="color:#888;">襲撃できるプレイヤーがいません</p>';
         return;
     }
 
     targets.forEach(t => {
-        const btn = document.createElement('button');
-        btn.className = 'target-btn';
-        btn.textContent = t.name;
-        btn.onclick = () => attackTarget(t.name);
-        list.appendChild(btn);
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'target-btn';
+        b.textContent = t.name;
+        b.dataset.id = t.id;
+        b.onclick = () => {
+            document.querySelectorAll('#wolf-target-list .target-btn').forEach(x => x.classList.remove('selected'));
+            b.classList.add('selected');
+            selectedWolfTargetId = t.id;
+            selectedWolfTargetName = t.name;
+            if (btn) btn.style.display = '';
+        };
+        list.appendChild(b);
     });
 }
 
-async function attackTarget(targetName) {
-    if (!confirm(`${targetName} さんを襲撃しますか？`)) return;
+async function submitAttack() {
+    if (!selectedWolfTargetId) {
+        alert('襲撃するプレイヤーを選んでください');
+        return;
+    }
+    if (!confirm(`${selectedWolfTargetName} さんを襲撃しますか？`)) return;
+
+    const btn = document.getElementById('btn-wolf-attack');
+    if (btn) btn.disabled = true;
 
     try {
         const { error } = await supabaseClient
             .from('players')
-            .update({ is_alive: false })
-            .eq('name', targetName);
+            .update({ night_target_id: selectedWolfTargetId })
+            .eq('name', myPlayerName);
 
         if (error) throw error;
 
@@ -1247,8 +1307,9 @@ async function attackTarget(targetName) {
             <p style="color:#c0caf5;">今夜の任務を終えました。<br>静かに朝を待ちましょう…</p>
         `;
     } catch (err) {
-        console.error('襲撃エラー:', err);
-        alert('襲撃に失敗しました。');
+        console.error('襲撃送信エラー:', err);
+        alert('襲撃の送信に失敗しました。');
+        if (btn) btn.disabled = false;
     }
 }
 
@@ -1369,7 +1430,7 @@ async function handlePhaseChange(newPhase) {
         hasVotedToday = false;
         isCountingVotes = false;
     }
-    // 夜フェーズから朝フェーズ（morning）へ移行する場合：占い師・霊媒師の結果を集計
+    // 夜フェーズから朝フェーズ（morning）へ移行する場合：占い師・霊媒師の結果を集計、および人狼の襲撃集計
     if (lastKnownPhase === 'night' && newPhase === 'morning') {
         // 占い師の集計
         try {
@@ -1426,6 +1487,34 @@ async function handlePhaseChange(newPhase) {
             }
         } catch (mediumErr) {
             console.warn('[MEDIUM] handlePhaseChange 霊媒集計スキップ:', mediumErr);
+        }
+        // 人狼の襲撃集計
+        try {
+            const { data: wolvesData, error: wolvesErr } = await supabaseClient
+                .from('players')
+                .select('id, name, night_target_id')
+                .eq('role', '人狼')
+                .eq('is_alive', true);
+
+            if (!wolvesErr && wolvesData && wolvesData.length > 0) {
+                const victimIds = wolvesData
+                    .map(w => w.night_target_id)
+                    .filter(id => id !== null && id !== undefined && id !== '');
+
+                const uniqueVictimIds = [...new Set(victimIds)];
+
+                if (uniqueVictimIds.length > 0) {
+                    const { error: killErr } = await supabaseClient
+                        .from('players')
+                        .update({ is_alive: false })
+                        .in('id', uniqueVictimIds);
+
+                    if (killErr) throw killErr;
+                    console.log(`[WOLF] handlePhaseChange 襲撃対象を死亡に更新しました: ${uniqueVictimIds}`);
+                }
+            }
+        } catch (wolfErr) {
+            console.warn('[WOLF] handlePhaseChange 人狼襲撃集計スキップ/エラー:', wolfErr);
         }
     }
     // 夢フェーズへ直接移行する場合（GMが「夢フェーズ」ボタンを押した場合など）もリセットする
@@ -1653,6 +1742,11 @@ async function startGameSync() {
                     currentPlayers.push(payload.new);
                 }
                 renderPlayerList();
+
+                // 朝フェーズ中の場合、犠牲者の表示を更新
+                if (lastKnownPhase === 'morning') {
+                    showMorningVictims();
+                }
 
                 // 自分が死亡した場合は霊界モードをチェック
                 if (myRoleType === 'player' && payload.new.name === myPlayerName) {

@@ -116,6 +116,11 @@
             <h2 style="color: #e0af68;">🌅 朝になりました</h2>
             <p style="color:#c0caf5;">昨晩の行動結果を確認してください。<br>GMが議論開始を宣言するまでお待ちください。</p>
         </div>
+        <!-- 全員共通：昨晩 of 犠牲者発表 -->
+        <div id="victim-result-area" class="night-content">
+            <h2 style="color: #f7768e;">💀 昨晩の犠牲者</h2>
+            <div id="victim-result-text" style="color:#c0caf5; font-size:1.1rem; margin-top:0.5rem;"></div>
+        </div>
         <!-- 占い師専用：占い結果 -->
         <div id="seer-result-area" class="night-content hidden">
             <h2 style="color: #bb9af7;">🔮 占い結果</h2>
@@ -146,6 +151,9 @@
             <h2 style="color: #f7768e;">襲撃ターゲット選択</h2>
             <p style="color:#c0caf5;">今夜、誰を襲撃しますか？</p>
             <div id="wolf-target-list" class="target-list"></div>
+            <button type="button" id="btn-wolf-attack" class="target-btn"
+                style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#f7768e,#ff9e64); display:none;"
+                onclick="submitAttack()">🔪 襲撃する</button>
         </div>
 
         <!-- 占い師用の占い画面 -->
