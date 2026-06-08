@@ -508,19 +508,34 @@ function renderMemoList() {
             
             // 新規作成時のみDOMの末尾に追加する（順序移動によるフォーカス外れを防ぐ）
             memoPlayerList.appendChild(itemEl);
+
+            // 生死状態のクラスを初期設定
+            if (p.is_alive) {
+                itemEl.classList.remove('dead');
+            } else {
+                itemEl.classList.add('dead');
+            }
         } else {
-            // 既存更新（テキストエリアは維持し、名前と状態クラスのみ更新）
+            // 既存更新
+            // この要素内の textarea が現在フォーカス（入力中）されている場合は、一切の更新をスルーする
+            const textarea = itemEl.querySelector('.memo-textarea');
+            if (textarea && document.activeElement === textarea) {
+                // 入力中は安全のため完全にスキップ
+                return;
+            }
+
+            // フォーカスされていない場合のみ更新を行う
             const nameDiv = itemEl.querySelector('.memo-player-name');
             if (nameDiv && nameDiv.textContent !== p.name) {
                 nameDiv.textContent = p.name;
             }
-        }
 
-        // 生死状態のクラスを更新
-        if (p.is_alive) {
-            itemEl.classList.remove('dead');
-        } else {
-            itemEl.classList.add('dead');
+            // 生死状態のクラスを更新
+            if (p.is_alive) {
+                itemEl.classList.remove('dead');
+            } else {
+                itemEl.classList.add('dead');
+            }
         }
     });
 }

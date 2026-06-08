@@ -1312,11 +1312,11 @@ body.theme-result-teruteru {
 /* 3カラムゲームレイアウト */
 .game-layout {
     display: grid;
-    grid-template-columns: minmax(200px, 280px) minmax(320px, 500px) minmax(200px, 280px);
+    grid-template-columns: minmax(180px, 240px) minmax(320px, 800px) minmax(180px, 240px);
     justify-content: center;
     gap: 1.5rem;
     width: 100%;
-    max-width: 1200px;
+    max-width: 1350px;
     margin: 0 auto;
     align-items: start;
     z-index: 10;
@@ -1330,7 +1330,7 @@ body.theme-result-teruteru {
     flex-direction: column;
     gap: 2rem;
     width: 100%;
-    max-width: 500px;
+    max-width: 800px;
     min-width: 320px;
     margin: 0 auto;
     flex-shrink: 0;
@@ -1516,7 +1516,7 @@ body.theme-result-teruteru {
 /* タブレットサイズ：右サイドバー自動非表示、2カラム化 */
 @media (max-width: 1024px) {
     .game-layout {
-        grid-template-columns: minmax(200px, 280px) minmax(320px, 500px);
+        grid-template-columns: minmax(180px, 240px) minmax(320px, 800px);
     }
     .right-sidebar {
         display: none !important;
@@ -1532,7 +1532,7 @@ body.theme-result-teruteru {
     }
     
     .game-layout .main-content {
-        max-width: 500px;
+        max-width: 100% !important; /* スマホでは画面いっぱいにどっしりと表示 */
         width: calc(100% - 2rem);
         padding: 0;
         box-sizing: border-box;
