@@ -481,7 +481,6 @@ function renderMemoList() {
         const key = `werewolf_memo_1_${myPlayerId}_${targetPlayerId}`;
         
         let itemEl = document.getElementById(`memo-item-${targetPlayerId}`);
-        let textarea = null;
 
         if (!itemEl) {
             // 新規作成
@@ -495,7 +494,7 @@ function renderMemoList() {
             nameDiv.textContent = p.name;
             itemEl.appendChild(nameDiv);
 
-            textarea = document.createElement('textarea');
+            const textarea = document.createElement('textarea');
             textarea.className = 'memo-textarea';
             textarea.placeholder = `${p.name} さんの考察メモ...`;
             textarea.value = localStorage.getItem(key) || '';
@@ -506,6 +505,9 @@ function renderMemoList() {
             });
 
             itemEl.appendChild(textarea);
+            
+            // 新規作成時のみDOMの末尾に追加する（順序移動によるフォーカス外れを防ぐ）
+            memoPlayerList.appendChild(itemEl);
         } else {
             // 既存更新（テキストエリアは維持し、名前と状態クラスのみ更新）
             const nameDiv = itemEl.querySelector('.memo-player-name');
@@ -520,9 +522,6 @@ function renderMemoList() {
         } else {
             itemEl.classList.add('dead');
         }
-
-        // DOMの末尾に追加（すでに存在する場合は単に順序が末尾に移動されるだけで、フォーカスは維持される）
-        memoPlayerList.appendChild(itemEl);
     });
 }
 

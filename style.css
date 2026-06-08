@@ -1312,7 +1312,8 @@ body.theme-result-teruteru {
 /* 3カラムゲームレイアウト */
 .game-layout {
     display: grid;
-    grid-template-columns: 280px 1fr 280px;
+    grid-template-columns: 280px 500px 280px;
+    justify-content: center;
     gap: 1.5rem;
     width: 95%;
     max-width: 1200px;
@@ -1511,9 +1512,9 @@ body.theme-result-teruteru {
    ============================================= */
 
 /* タブレットサイズ：右サイドバー非表示、2カラム化 */
-@media (max-width: 991px) {
+@media (max-width: 1100px) {
     .game-layout {
-        grid-template-columns: 260px 1fr;
+        grid-template-columns: 280px 500px;
     }
     .right-sidebar {
         display: none !important;
@@ -1527,10 +1528,12 @@ body.theme-result-teruteru {
         flex-direction: column;
         align-items: center;
         padding: 1rem 0;
+        z-index: auto !important; /* スタッキングコンテキストの解除 */
     }
     
     .game-layout .main-content {
-        max-width: 100%;
+        max-width: 100% !important;
+        width: 100%;
         padding: 0 1rem;
         box-sizing: border-box;
     }
@@ -1544,7 +1547,7 @@ body.theme-result-teruteru {
         height: 100vh;
         max-height: 100vh;
         border-radius: 0 24px 24px 0;
-        z-index: 21000; /* ヘルプモーダル(20000)より手前に配置 */
+        z-index: 21000 !important; /* 暗幕オーバーレイ(20500)より手前に配置 */
         box-sizing: border-box;
         transition: left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
         box-shadow: 5px 0 25px rgba(0, 0, 0, 0.6);
