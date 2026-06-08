@@ -115,7 +115,7 @@ body.theme-result-teruteru {
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--border-color);
     border-radius: 24px;
-    padding: 2.5rem 2rem;
+    padding: 3.2rem 2.5rem;
     text-align: center;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     transition: all 0.5s ease;
@@ -1320,7 +1320,7 @@ body.theme-result-teruteru {
     margin: 0 auto;
     align-items: start;
     z-index: 10;
-    padding: 2rem 1rem;
+    padding: 4rem 1.5rem;
     box-sizing: border-box;
 }
 
@@ -1527,7 +1527,7 @@ body.theme-result-teruteru {
 @media (max-width: 768px) {
     .game-layout {
         display: block; /* flex/gridによるスタッキングコンテキスト発生を防ぐため block に変更 */
-        padding: 1rem 0;
+        padding: 2.2rem 0;
         z-index: auto !important;
     }
     
@@ -1540,8 +1540,9 @@ body.theme-result-teruteru {
         min-width: 0; /* スマホでは画面サイズに合わせてさらに縮小できるように */
     }
 
-    /* 左サイドバーを画面外ドロワーに変更 */
+    /* 左サイドバーを通常時非表示にし、スペースを占有させない */
     .left-sidebar {
+        display: none !important; /* スマホの通常時は完全に非表示にして見えない壁を完全排除 */
         position: fixed;
         top: 0;
         left: -320px; /* 画面の左外に隠す */
@@ -1564,7 +1565,13 @@ body.theme-result-teruteru {
 
     /* ドロワー表示中のクラス */
     .left-sidebar.show-mobile {
+        display: block !important; /* ドロワーを開いたときだけ表示 */
         left: 0;
+    }
+
+    /* スマホ用カードパディング（適度な広さを保ちつつ窮屈さを防ぐ） */
+    .card {
+        padding: 2.2rem 1.5rem !important;
     }
 
     /* スマホ表示時は閉じるボタンとトグルボタンを表示 */

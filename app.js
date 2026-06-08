@@ -1962,6 +1962,10 @@ async function joinGame(role) {
 }
 
 function setupGameView() {
+    const loginContainer = document.getElementById('login-container');
+    if (loginContainer) {
+        loginContainer.classList.add('hidden');
+    }
     loginView.classList.add('hidden');
     gameView.classList.remove('hidden');
 
