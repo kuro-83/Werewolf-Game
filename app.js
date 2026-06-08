@@ -394,6 +394,8 @@ async function fetchMyRole() {
             myRoleName = '役職なし';
             document.getElementById('my-role-name').textContent = myRoleName;
         }
+        // 人狼チャットボタンの表示制御
+        updateWolfChatButtonVisibility();
     } catch (err) {
         console.error('役職取得エラー:', err);
         document.getElementById('my-role-name').textContent = '取得エラー';
@@ -1975,6 +1977,9 @@ function setupGameView() {
         gmNameDisplay.classList.remove('hidden');
         initRoleCounters();
     }
+    // 人狼チャットボタンの表示制御
+    updateWolfChatButtonVisibility();
+    
     startGameSync();
 }
 
@@ -2099,6 +2104,22 @@ async function startGameSync() {
                 currentPlayers = currentPlayers.filter(p => p.name !== payload.old.name);
                 renderPlayerList();
                 renderMemoList();
+            }
+        )
+        // 人狼チャットメッセージ追加のリアルタイム同期
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'werewolf_chat' },
+            (payload) => {
+                if (myRoleType === 'gm' || myRoleName === '人狼') {
+                    receiveChatMessage(payload.new);
+                }
+            }
+        )
+        // 人狼秘密指令更新のリアルタイム同期
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'werewolf_mission' },
+            (payload) => {
+                if (myRoleType === 'gm' || myRoleName === '人狼') {
+                    receiveMissionUpdate(payload.new.mission_text);
+                }
             }
         )
         .subscribe();
@@ -2247,6 +2268,172 @@ function generateRoleHelpDetailsHtml(role) {
             <p><strong>勝利条件:</strong> ${role.win_condition}</p>
         </div>
     `;
+}
+
+// =============================================
+// 🐺 人狼チャット ＆ 秘密指令ロジック
+// =============================================
+function updateWolfChatButtonVisibility() {
+    const btnWolfChat = document.getElementById('btn-wolf-chat');
+    if (!btnWolfChat) return;
+
+    if (myRoleType === 'gm' || myRoleName === '人狼') {
+        btnWolfChat.classList.remove('hidden');
+    } else {
+        btnWolfChat.classList.add('hidden');
+    }
+}
+
+async function openWolfChatModal() {
+    const modal = document.getElementById('wolf-chat-modal');
+    if (!modal) return;
+
+    if (myRoleType !== 'gm' && myRoleName !== '人狼') {
+        alert('このチャットを開く権限がありません。');
+        return;
+    }
+
+    modal.classList.remove('hidden');
+
+    const gmForm = document.getElementById('gm-mission-form-area');
+    if (gmForm) {
+        if (myRoleType === 'gm') {
+            gmForm.classList.remove('hidden');
+        } else {
+            gmForm.classList.add('hidden');
+        }
+    }
+
+    try {
+        const { data: mission, error: missionErr } = await supabaseClient
+            .from('werewolf_mission')
+            .select('mission_text')
+            .eq('id', 1)
+            .single();
+        if (!missionErr && mission) {
+            receiveMissionUpdate(mission.mission_text);
+        }
+
+        const { data: chats, error: chatErr } = await supabaseClient
+            .from('werewolf_chat')
+            .select('*')
+            .order('created_at', { ascending: true });
+        if (!chatErr && chats) {
+            renderChatHistory(chats);
+        }
+    } catch (e) {
+        console.error('チャットデータ初期ロードエラー:', e);
+    }
+}
+
+function closeWolfChatModal() {
+    const modal = document.getElementById('wolf-chat-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+async function sendWolfChatMessage() {
+    const input = document.getElementById('input-wolf-chat');
+    if (!input) return;
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    if (myRoleType !== 'gm' && myRoleName !== '人狼') return;
+
+    const sender = myRoleType === 'gm' ? 'GM' : myPlayerName;
+    const senderRole = myRoleType === 'gm' ? 'GM' : '人狼';
+
+    try {
+        const { error } = await supabaseClient
+            .from('werewolf_chat')
+            .insert([{ sender: sender, sender_role: senderRole, message: msg }]);
+        if (error) throw error;
+        input.value = '';
+    } catch (e) {
+        console.error('メッセージ送信エラー:', e);
+        alert('メッセージの送信に失敗しました。');
+    }
+}
+
+async function submitGmMission() {
+    const input = document.getElementById('input-gm-mission');
+    if (!input) return;
+    if (myRoleType !== 'gm') return;
+
+    const missionText = input.value.trim();
+
+    try {
+        const { error } = await supabaseClient
+            .from('werewolf_mission')
+            .update({ mission_text: missionText })
+            .eq('id', 1);
+        if (error) throw error;
+        input.value = '';
+        alert('秘密指令を送信しました。');
+    } catch (e) {
+        console.error('指令送信エラー:', e);
+        alert('秘密指令の送信に失敗しました。');
+    }
+}
+
+function receiveChatMessage(data) {
+    const log = document.getElementById('wolf-chat-log');
+    if (!log) return;
+
+    // 重複描画を防ぐため、既に同じIDのメッセージが描画されていないか確認
+    const existingMsg = document.getElementById(`msg-${data.id}`);
+    if (existingMsg) return;
+
+    const msgDiv = document.createElement('div');
+    msgDiv.id = `msg-${data.id}`;
+    const isGm = data.sender_role === 'GM';
+    msgDiv.className = `chat-msg ${isGm ? 'is-gm' : 'is-wolf'}`;
+
+    const timeStr = data.created_at ? new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+    msgDiv.innerHTML = `
+        <div class="chat-msg-header">
+            <span class="chat-msg-sender">[${data.sender_role}] ${data.sender}</span>
+            <span class="chat-msg-time">${timeStr}</span>
+        </div>
+        <div class="chat-msg-body">${escapeHTML(data.message)}</div>
+    `;
+
+    log.appendChild(msgDiv);
+    log.scrollTop = log.scrollHeight;
+}
+
+function receiveMissionUpdate(missionText) {
+    const displayArea = document.getElementById('wolf-mission-display-area');
+    const textEl = document.getElementById('wolf-mission-text');
+    if (!displayArea || !textEl) return;
+
+    if (missionText) {
+        textEl.textContent = missionText;
+        displayArea.classList.remove('hidden');
+    } else {
+        displayArea.classList.add('hidden');
+    }
+}
+
+function renderChatHistory(messages) {
+    const log = document.getElementById('wolf-chat-log');
+    if (!log) return;
+    log.innerHTML = '';
+    messages.forEach(m => receiveChatMessage(m));
+}
+
+function escapeHTML(str) {
+    return str.replace(/[&<>'"]/g, 
+        tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+        }[tag] || tag)
+    );
 }
 
 // =============================================

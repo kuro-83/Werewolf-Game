@@ -1632,3 +1632,60 @@ body.theme-result-teruteru {
         transition: opacity 0.3s ease;
     }
 }
+
+/* =============================================
+   🐺 人狼チャット用スタイル
+   ============================================= */
+.chat-msg {
+    display: flex;
+    flex-direction: column;
+    padding: 0.8rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.chat-msg.is-gm {
+    border-left: 4px solid var(--btn-gm);
+    background: rgba(255, 158, 100, 0.05);
+}
+
+.chat-msg.is-wolf {
+    border-left: 4px solid #f7768e;
+    background: rgba(247, 118, 142, 0.05);
+}
+
+.chat-msg-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+}
+
+.chat-msg-sender {
+    color: #c0caf5;
+}
+
+.chat-msg.is-gm .chat-msg-sender {
+    color: #ff9e64; /* GMはオレンジ */
+}
+
+.chat-msg.is-wolf .chat-msg-sender {
+    color: #f7768e; /* 人狼は赤ピンク */
+}
+
+.chat-msg-time {
+    color: rgba(255, 255, 255, 0.3);
+    font-weight: 400;
+    font-size: 0.75rem;
+}
+
+.chat-msg-body {
+    font-size: 0.9rem;
+    color: #c0caf5;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-all;
+}

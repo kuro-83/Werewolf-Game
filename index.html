@@ -56,6 +56,7 @@
 
                 <div style="margin-top: 0.5rem; text-align: center; display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
                     <button type="button" id="btn-help-rules" class="help-rules-btn" onclick="openHelpModal()">📖 役職・ルール確認</button>
+                    <button type="button" id="btn-wolf-chat" class="help-rules-btn hidden" style="color:#f7768e; border-color:rgba(247,118,142,0.3);" onclick="openWolfChatModal()">🐺 人狼チャット</button>
                     <button type="button" id="btn-toggle-memo" class="toggle-memo-btn" onclick="toggleMobileMemo()">📝 メモ</button>
                 </div>
 
@@ -308,6 +309,42 @@
             <div class="all-roles-help">
                 <h3>ゲームの全役職一覧</h3>
                 <div id="all-roles-accordion" class="accordion-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================
+         🐺 人狼チャット ＆ 秘密指令モーダル
+         ====================================== -->
+    <div id="wolf-chat-modal" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 600px;">
+            <span class="modal-close" onclick="closeWolfChatModal()">&times;</span>
+            <h2 class="modal-title" style="color: #f7768e;">🐺 人狼専用チャット</h2>
+            
+            <!-- 📌 GMからの秘密指令表示エリア (人狼 & GM共通) -->
+            <div id="wolf-mission-display-area" class="my-role-help hidden" style="border-color: #f7768e; background: rgba(247,118,142,0.08); margin-bottom: 1.5rem;">
+                <h3 style="color: #f7768e; margin: 0 0 0.5rem 0;">📌 GMからの秘密指令</h3>
+                <p id="wolf-mission-text" style="color: #fff; font-size: 1rem; font-weight: 700; margin: 0; white-space: pre-wrap;"></p>
+            </div>
+
+            <!-- 📝 GM専用：秘密指令送信フォーム -->
+            <div id="gm-mission-form-area" class="hidden" style="margin-bottom: 1.5rem; background: rgba(0, 0, 0, 0.2); padding: 1rem; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);">
+                <h3 style="margin: 0 0 0.8rem 0; font-size: 0.95rem; color: #ff9e64; text-align: left;">📢 【GM専用】人狼への秘密指令送信</h3>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="input-gm-mission" class="name-input" style="font-size: 0.95rem; padding: 0.7rem; text-align: left;" placeholder="ウインクした人しか襲撃できません 等" autocomplete="off">
+                    <button type="button" class="action-btn" style="padding: 0.7rem 1.2rem; flex-shrink: 0;" onclick="submitGmMission()">送信</button>
+                </div>
+            </div>
+
+            <!-- 💬 チャットメッセージ表示エリア -->
+            <div id="wolf-chat-log" style="height: 300px; overflow-y: auto; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-color); border-radius: 16px; padding: 1rem; margin-bottom: 1rem; text-align: left; display: flex; flex-direction: column; gap: 0.8rem;">
+                <!-- メッセージが動的に追加されます -->
+            </div>
+
+            <!-- ✉️ メッセージ送信エリア -->
+            <div style="display: flex; gap: 0.5rem;">
+                <input type="text" id="input-wolf-chat" class="name-input" style="font-size: 0.95rem; padding: 0.8rem; text-align: left;" placeholder="作戦を話し合おう..." autocomplete="off" onkeydown="if(event.key==='Enter') sendWolfChatMessage()">
+                <button type="button" class="action-btn" style="padding: 0.8rem 1.5rem; flex-shrink: 0; background: rgba(247,118,142,0.2); color: #f7768e; border-color: rgba(247,118,142,0.4);" onclick="sendWolfChatMessage()">送信</button>
             </div>
         </div>
     </div>
