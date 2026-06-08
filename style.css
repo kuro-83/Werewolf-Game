@@ -1600,6 +1600,15 @@ body.theme-result-teruteru {
         padding: 2.2rem 1.5rem !important;
     }
 
+    /* スマホ用メインカードの最小高さと配置調整（縦潰れを防ぎ、中身を中央寄せにする） */
+    .game-layout .main-content > .card {
+        min-height: 500px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
     /* スマホ表示時は閉じるボタンとトグルボタンを表示 */
     .close-memo-btn {
         display: block;
