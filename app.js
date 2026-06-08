@@ -191,6 +191,9 @@ async function updatePhaseDisplay(phase) {
     }
 
     if (phase === 'waiting') {
+        const chatLog = document.getElementById('wolf-chat-log');
+        if (chatLog) chatLog.innerHTML = '';
+
         playerListArea.classList.remove('hidden');
         myRoleArea.classList.add('hidden');
         document.getElementById('ghost-mode-overlay').classList.add('hidden');
@@ -1803,13 +1806,17 @@ async function resetGame() {
 
         // 人狼チャット履歴を削除
         try {
-            await supabaseClient
+            const { error: chatError } = await supabaseClient
                 .from('werewolf_chat')
                 .delete()
                 .neq('message', 'dummy_string_for_reset_12345');
+            if (chatError) console.error("Chat delete error:", chatError);
         } catch (chatResetErr) {
             console.warn('人狼チャット履歴の削除に失敗しました:', chatResetErr);
         }
+
+        const chatLog = document.getElementById('wolf-chat-log');
+        if (chatLog) chatLog.innerHTML = '';
 
         // game_status を waiting に戻す
         const { error: phaseError } = await supabaseClient
@@ -1891,13 +1898,17 @@ async function joinGame(role) {
 
             // 人狼チャット履歴を削除
             try {
-                await supabaseClient
+                const { error: chatError } = await supabaseClient
                     .from('werewolf_chat')
                     .delete()
                     .neq('message', 'dummy_string_for_reset_12345');
+                if (chatError) console.error("Chat delete error:", chatError);
             } catch (chatResetErr) {
                 console.warn('人狼チャット履歴の削除に失敗しました:', chatResetErr);
             }
+
+            const chatLog = document.getElementById('wolf-chat-log');
+            if (chatLog) chatLog.innerHTML = '';
         } else if (role === 'player') {
             const { error } = await supabaseClient
                 .from('players')
