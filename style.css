@@ -1318,9 +1318,17 @@ body.theme-result-teruteru {
     width: 100%;
     max-width: 1350px;
     margin: 0 auto;
-    align-items: start;
+    align-items: stretch; /* stretchにして高さを引き揃える */
     z-index: 10;
     padding: 4rem 1.5rem;
+    box-sizing: border-box;
+}
+
+/* PC大画面時の高さを680pxに統一 */
+.left-sidebar,
+.right-sidebar,
+.game-layout .main-content {
+    height: 680px;
     box-sizing: border-box;
 }
 
@@ -1334,6 +1342,15 @@ body.theme-result-teruteru {
     min-width: 320px;
     margin: 0 auto;
     flex-shrink: 0;
+}
+
+/* メインコンテンツ内のカードを縦に引き伸ばし、内部を上下中央寄せにする */
+.game-layout .main-content > .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    box-sizing: border-box;
 }
 
 /* サイドバー（ガラスモルフィズム） */
@@ -1517,6 +1534,15 @@ body.theme-result-teruteru {
 @media (max-width: 1024px) {
     .game-layout {
         grid-template-columns: minmax(180px, 240px) minmax(320px, 800px);
+        height: auto; /* 高さを自動に戻す */
+    }
+    .left-sidebar,
+    .right-sidebar,
+    .game-layout .main-content {
+        height: auto; /* 高さを自動に戻す */
+    }
+    .game-layout .main-content > .card {
+        flex: none; /* 自動縦伸びを解除 */
     }
     .right-sidebar {
         display: none !important;
