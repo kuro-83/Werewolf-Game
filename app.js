@@ -44,13 +44,33 @@ let voteCountdownTimer = null;  // カウントダウンタイマー ID
 // タイムスケジュール（タイムライン）定義
 // =============================================
 const GAME_TIMELINE = [
-    { period: "朝礼", phase: "rules", label: "ルール説明" },
-    { period: "1限前休み", phase: "night", label: "【1日目】1日目夜！" },
-    { period: "2限前休み", phase: "discussion", label: "【2日目】朝の犠牲者発表＆議論" },
-    { period: "昼休み", phase: "vote", label: "【2日目】お昼の追放投票" },
-    { period: "3限前休み", phase: "night", label: "【2日目】2日目夜！" },
-    { period: "4限前休み", phase: "discussion", label: "【3日目】朝の犠牲者発表＆議論" },
-    { period: "放課後", phase: "vote", label: "【3日目】放課後の追放投票" }
+  { period: "朝礼", phase: "waiting", label: "ルール説明" },
+  { period: "1限前休み", phase: "night", label: "【1日目】1日目夜！" },
+  { period: "2限前休み", phase: "morning", label: "【2日目】朝の生存確認" },
+  { period: "2限前休み", phase: "discussion", label: "【2日目】昼の議論" },
+  { period: "2限前休み", phase: "voting", label: "【2日目】投票" },
+  { period: "2限前休み", phase: "night", label: "【2日目】夜の襲撃" },
+  { period: "3限前休み", phase: "morning", label: "【3日目】朝の生存確認" },
+  { period: "3限前休み", phase: "discussion", label: "【3日目】昼の議論" },
+  { period: "3限前休み", phase: "voting", label: "【3日目】投票" },
+  { period: "3限前休み", phase: "night", label: "【3日目】夜の襲撃" },
+  { period: "昼休み(前半)", phase: "morning", label: "【4日目】朝の生存確認" },
+  { period: "昼休み(前半)", phase: "discussion", label: "【4日目】昼の議論" },
+  { period: "昼休み(前半)", phase: "voting", label: "【4日目】投票" },
+  { period: "昼休み(前半)", phase: "night", label: "【4日目】夜の襲撃" },
+  { period: "昼休み(中盤)", phase: "morning", label: "【5日目】朝の生存確認" },
+  { period: "昼休み(中盤)", phase: "discussion", label: "【5日目】大議論フェーズ！！" },
+  { period: "昼休み(後半)", phase: "voting", label: "【5日目】投票" },
+  { period: "昼休み(後半)", phase: "night", label: "【5日目】夜の襲撃" },
+  { period: "5限前休み", phase: "morning", label: "【6日目】朝の生存確認" },
+  { period: "5限前休み", phase: "discussion", label: "【6日目】昼の議論" },
+  { period: "5限前休み", phase: "voting", label: "【6日目】投票" },
+  { period: "5限前休み", phase: "night", label: "【6日目】夜の襲撃" },
+  { period: "6限前休み", phase: "morning", label: "【7日目】朝の生存確認" },
+  { period: "6限前休み", phase: "discussion", label: "【7日目】昼の議論" },
+  { period: "6限前休み", phase: "voting", label: "【7日目】投票" },
+  { period: "6限前休み", phase: "night", label: "【7日目】夜の襲撃" },
+  { period: "終礼", phase: "result", label: "結果発表・ネタばらし！" }
 ];
 
 let currentTimelineIndex = 0;
