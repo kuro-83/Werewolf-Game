@@ -41,6 +41,21 @@ let isCountingVotes = false; // 集計中の重複実行防止フラグ
 let voteCountdownTimer = null;  // カウントダウンタイマー ID
 
 // =============================================
+// タイムスケジュール（タイムライン）定義
+// =============================================
+const GAME_TIMELINE = [
+    { period: "朝礼", phase: "rules", label: "ルール説明" },
+    { period: "1限前休み", phase: "night", label: "【1日目】1日目夜！" },
+    { period: "2限前休み", phase: "discussion", label: "【2日目】朝の犠牲者発表＆議論" },
+    { period: "昼休み", phase: "vote", label: "【2日目】お昼の追放投票" },
+    { period: "3限前休み", phase: "night", label: "【2日目】2日目夜！" },
+    { period: "4限前休み", phase: "discussion", label: "【3日目】朝の犠牲者発表＆議論" },
+    { period: "放課後", phase: "vote", label: "【3日目】放課後の追放投票" }
+];
+
+let currentTimelineIndex = 0;
+
+// =============================================
 // 定数
 // =============================================
 const phaseNames = {
@@ -172,11 +187,7 @@ async function updatePhaseDisplay(phase) {
 
         if (myRoleType === 'gm') {
             roleSettingsArea.classList.remove('hidden');
-            document.getElementById('btn-waiting').classList.add('hidden');
-            document.getElementById('reset-area').classList.add('hidden');
             document.getElementById('vote-close-area').classList.add('hidden');
-            document.getElementById('morning-start-area').classList.add('hidden');
-            document.getElementById('morning-end-area').classList.add('hidden');
         }
 
     } else {
@@ -196,20 +207,6 @@ async function updatePhaseDisplay(phase) {
 
         if (myRoleType === 'gm') {
             playerListArea.classList.remove('hidden');
-            document.getElementById('btn-waiting').classList.add('hidden');
-            document.getElementById('reset-area').classList.remove('hidden');
-            // 夜フェーズ中のみ「朝フェーズへ進む」ボタンを表示
-            if (phase === 'night') {
-                document.getElementById('morning-start-area').classList.remove('hidden');
-            } else {
-                document.getElementById('morning-start-area').classList.add('hidden');
-            }
-            // 朝フェーズ中のみ「朝を終了して議論開始」ボタンを表示
-            if (phase === 'morning') {
-                document.getElementById('morning-end-area').classList.remove('hidden');
-            } else {
-                document.getElementById('morning-end-area').classList.add('hidden');
-            }
             // 投票フェーズのみ「投票を締め切る」ボタンを表示
             if (phase === 'voting') {
                 document.getElementById('vote-close-area').classList.remove('hidden');
@@ -1122,94 +1119,8 @@ async function proceedToNight() {
 
     if (myRoleType !== 'gm') return; // GMのみ Supabase を更新
 
-    try {
-        // ── 占い師の集計（フェーズ移行前に実行）──
-        try {
-            const { data: seerData, error: seerErr } = await supabaseClient
-                .from('players')
-                .select('id, name, night_target_id')
-                .eq('role', '預言者')
-                .eq('is_alive', true)
-                .maybeSingle();
-
-            if (!seerErr && seerData && seerData.night_target_id) {
-                // ターゲットの役職を確認
-                const { data: targetData, error: targetErr } = await supabaseClient
-                    .from('players')
-                    .select('role')
-                    .eq('id', seerData.night_target_id)
-                    .maybeSingle();
-
-                if (!targetErr && targetData) {
-                    const result = targetData.role === '人狼' ? '人狼' : '人間';
-                    await supabaseClient
-                        .from('players')
-                        .update({ night_result: result })
-                        .eq('id', seerData.id);
-                    console.log(`[SEER] 占い結果: ${result} (target_id: ${seerData.night_target_id})`);
-                }
-            }
-        } catch (seerCalcErr) {
-            console.warn('[SEER] 占い集計に失敗しましたが、フェーズ移行は続行します:', seerCalcErr);
-        }
-
-        // ── 霊媒師の集計（フェーズ移行前に実行）──
-        try {
-            const { data: mediumData, error: mediumErr } = await supabaseClient
-                .from('players')
-                .select('id, name, night_target_id')
-                .eq('role', '霊媒師')
-                .eq('is_alive', true)
-                .maybeSingle();
-
-            if (!mediumErr && mediumData && mediumData.night_target_id) {
-                const { data: targetData, error: targetErr } = await supabaseClient
-                    .from('players')
-                    .select('role')
-                    .eq('id', mediumData.night_target_id)
-                    .maybeSingle();
-
-                if (!targetErr && targetData) {
-                    const result = targetData.role === '人狼' ? '人狼' : '人間';
-                    await supabaseClient
-                        .from('players')
-                        .update({ night_result: result })
-                        .eq('id', mediumData.id);
-                    console.log(`[MEDIUM] 霊媒結果: ${result} (target_id: ${mediumData.night_target_id})`);
-                }
-            }
-        } catch (mediumCalcErr) {
-            console.warn('[MEDIUM] 霊媒集計に失敗しましたが、フェーズ移行は続行します:', mediumCalcErr);
-        }
-
-        // 全員の vote_target_id を NULL にリセット
-        const { error: resetError } = await supabaseClient
-            .from('players')
-            .update({ vote_target_id: null })
-            .neq('name', 'dummy_string_for_reset_12345');
-        if (resetError) throw resetError;
-
-        // 全員の night_target_id ・ night_result を NULL にリセット
-        const { error: nightResetError } = await supabaseClient
-            .from('players')
-            .update({ night_target_id: null, night_result: null })
-            .neq('name', 'dummy_string_for_reset_12345');
-        if (nightResetError) throw nightResetError;
-        console.log('[NIGHT] night_target_id / night_result をリセットしました');
-
-        // フェーズを night に
-        const { error: phaseError } = await supabaseClient
-            .from('game_status')
-            .update({ current_phase: 'night' })
-            .eq('id', 1);
-        if (phaseError) throw phaseError;
-
-        isCountingVotes = false;
-
-    } catch (err) {
-        console.error('夜フェーズ遷移エラー:', err);
-        alert('夜フェーズへの遷移に失敗しました。');
-    }
+    // GMはタイムラインを1つ進める
+    await advanceTimeline(1);
 }
 
 
@@ -1699,7 +1610,7 @@ async function distributeRolesAndStartGame() {
     }
 }
 
-async function handlePhaseChange(newPhase) {
+async function handlePhaseChange(newPhase, newTimelineIndex = null) {
     if (lastKnownPhase === 'waiting' && newPhase !== 'waiting') {
         const isSuccess = await distributeRolesAndStartGame();
         if (!isSuccess) return;
@@ -1709,8 +1620,8 @@ async function handlePhaseChange(newPhase) {
         hasVotedToday = false;
         isCountingVotes = false;
     }
-    // 夜フェーズから朝フェーズ（morning）へ移行する場合：占い師・霊媒師の結果を集計、および人狼の襲撃集計
-    if (lastKnownPhase === 'night' && newPhase === 'morning') {
+    // 夜フェーズから朝フェーズ（morning）または議論フェーズ（discussion）へ移行する場合：占い師・霊媒師の結果を集計、および人狼の襲撃集計
+    if (lastKnownPhase === 'night' && (newPhase === 'morning' || newPhase === 'discussion')) {
         // 占い師の集計
         try {
             const { data: seerData, error: seerErr } = await supabaseClient
@@ -1817,23 +1728,29 @@ async function handlePhaseChange(newPhase) {
             console.warn('[WOLF/KNIGHT] handlePhaseChange 襲撃・守護集計スキップ/エラー:', evalErr);
         }
     }
-    // 夢フェーズへ直接移行する場合（GMが「夢フェーズ」ボタンを押した場合など）もリセットする
+    // 夜フェーズへ移行する場合、各種ターゲット・投票をリセット
     if (newPhase === 'night') {
         try {
             const { error: nightResetError } = await supabaseClient
                 .from('players')
-                .update({ night_target_id: null, night_result: null })
+                .update({ vote_target_id: null, night_target_id: null, night_result: null })
                 .neq('name', 'dummy_string_for_reset_12345');
             if (nightResetError) throw nightResetError;
-            console.log('[NIGHT] handlePhaseChange: night_target_id / night_result をリセットしました');
+            console.log('[NIGHT] handlePhaseChange: vote_target_id / night_target_id / night_result をリセットしました');
         } catch (nightResetErr) {
             console.warn('[NIGHT] night リセットに失敗しましたが、フェーズ移行は続行します:', nightResetErr);
         }
     }
+
+    const updateData = { current_phase: newPhase };
+    if (newTimelineIndex !== null) {
+        updateData.timeline_index = newTimelineIndex;
+    }
+
     try {
         const { error } = await supabaseClient
             .from('game_status')
-            .update({ current_phase: newPhase })
+            .update(updateData)
             .eq('id', 1);
         if (error) throw error;
     } catch (error) {
@@ -1866,7 +1783,7 @@ async function resetGame() {
         // game_status を waiting に戻す
         const { error: phaseError } = await supabaseClient
             .from('game_status')
-            .update({ current_phase: 'waiting', winner: null })
+            .update({ current_phase: 'waiting', winner: null, timeline_index: 0 })
             .eq('id', 1);
 
         if (phaseError) {
@@ -1991,7 +1908,7 @@ async function startGameSync() {
     try {
         const phaseRes = await supabaseClient
             .from('game_status')
-            .select('current_phase, winner')
+            .select('current_phase, winner, timeline_index')
             .limit(1)
             .single();
         if (phaseRes.error) throw phaseRes.error;
@@ -2010,7 +1927,13 @@ async function startGameSync() {
             _pendingWinner = phaseRes.data.winner;
         }
 
+        currentTimelineIndex = phaseRes.data.timeline_index !== undefined && phaseRes.data.timeline_index !== null
+            ? phaseRes.data.timeline_index
+            : 0;
+
         await updatePhaseDisplay(phaseRes.data.current_phase);
+        renderTimeline();
+        updateGmTimelineButtons();
 
     } catch (error) {
         console.error('初期データの取得エラー:', error);
@@ -2025,7 +1948,12 @@ async function startGameSync() {
                 if (payload.new.winner) {
                     _pendingWinner = payload.new.winner;
                 }
+                if (payload.new.timeline_index !== undefined && payload.new.timeline_index !== null) {
+                    currentTimelineIndex = payload.new.timeline_index;
+                }
                 await updatePhaseDisplay(payload.new.current_phase);
+                renderTimeline();
+                updateGmTimelineButtons();
             }
         )
         // プレイヤーの入室
@@ -2434,6 +2362,184 @@ function escapeHTML(str) {
             '"': '&quot;'
         }[tag] || tag)
     );
+}
+
+// =============================================
+// 📅 タイムライン（タイムテーブル）制御・GM進行
+// =============================================
+
+/**
+ * タイムスケジュールを1手進める/戻す (GM専用)
+ */
+async function advanceTimeline(offset) {
+    if (myRoleType !== 'gm') return;
+
+    if (offset === 1) {
+        let nextPhase = '';
+        let nextTimelineIndex = currentTimelineIndex;
+
+        if (lastKnownPhase === 'waiting') {
+            // 朝礼(rules) -> 1限前休み(night)
+            nextTimelineIndex = 1;
+            nextPhase = 'night';
+        } else if (lastKnownPhase === 'night') {
+            // 夜 -> 朝（タイムスケジュール上の次の枠に進み、朝フェーズを開始）
+            nextTimelineIndex = currentTimelineIndex + 1;
+            nextPhase = 'morning';
+        } else if (lastKnownPhase === 'morning') {
+            // 朝 -> 議論（タイムスケジュールインデックスは進めず、フェーズのみ進行）
+            nextPhase = 'discussion';
+        } else if (lastKnownPhase === 'discussion') {
+            // 議論 -> 投票（タイムスケジュール上の次の枠に進み、投票フェーズを開始）
+            nextTimelineIndex = currentTimelineIndex + 1;
+            nextPhase = 'voting';
+        } else if (lastKnownPhase === 'voting') {
+            // 投票中
+            // すでに投票結果が表示されている場合は次の夜へ進める
+            const voteResultOverlay = document.getElementById('vote-result-overlay');
+            if (voteResultOverlay && !voteResultOverlay.classList.contains('hidden')) {
+                nextTimelineIndex = currentTimelineIndex + 1;
+                nextPhase = 'night';
+            } else {
+                // まだ投票中なら、投票を強制的に締め切って結果を表示させる
+                await closeVoting();
+                return;
+            }
+        } else if (lastKnownPhase === 'result') {
+            alert('ゲームはすでに終了しています。リセットしてください。');
+            return;
+        }
+
+        // 境界値チェック
+        if (nextTimelineIndex >= GAME_TIMELINE.length) {
+            alert('タイムスケジュールはこれ以上進められません。勝敗を確認するか、ゲーム強制終了してください。');
+            return;
+        }
+
+        await handlePhaseChange(nextPhase, nextTimelineIndex);
+
+    } else if (offset === -1) {
+        let prevPhase = '';
+        let prevTimelineIndex = currentTimelineIndex;
+
+        if (lastKnownPhase === 'night') {
+            // 夜 -> 前の投票（タイムスケジュールを1つ戻す）
+            prevTimelineIndex = currentTimelineIndex - 1;
+            prevPhase = 'voting';
+            if (prevTimelineIndex < 0) {
+                prevTimelineIndex = 0;
+                prevPhase = 'waiting';
+            }
+        } else if (lastKnownPhase === 'morning') {
+            // 朝 -> 夜（タイムスケジュールを1つ戻す）
+            prevTimelineIndex = currentTimelineIndex - 1;
+            prevPhase = 'night';
+        } else if (lastKnownPhase === 'discussion') {
+            // 議論 -> 朝（タイムスケジュールはそのまま）
+            prevPhase = 'morning';
+        } else if (lastKnownPhase === 'voting') {
+            // 投票 -> 議論（タイムスケジュールを1つ戻す）
+            prevTimelineIndex = currentTimelineIndex - 1;
+            prevPhase = 'discussion';
+        } else if (lastKnownPhase === 'result') {
+            prevTimelineIndex = GAME_TIMELINE.length - 1;
+            prevPhase = 'voting';
+        }
+
+        await handlePhaseChange(prevPhase, prevTimelineIndex);
+    }
+}
+
+/**
+ * 右側サイドバーにタイムスケジュールを描画する
+ */
+function renderTimeline() {
+    const listEl = document.getElementById('timeline-list');
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+
+    GAME_TIMELINE.forEach((step, idx) => {
+        const item = document.createElement('div');
+        item.id = `timeline-item-${idx}`;
+
+        // 過去・現在・未来のクラス判定
+        let stateClass = 'is-future';
+        let pinIcon = '';
+
+        if (idx < currentTimelineIndex) {
+            stateClass = 'is-past';
+        } else if (idx === currentTimelineIndex) {
+            stateClass = 'is-current';
+            pinIcon = '📌 ';
+        }
+
+        item.className = `timeline-item ${stateClass}`;
+
+        item.innerHTML = `
+            <div class="timeline-period-badge">${step.period}</div>
+            <div class="timeline-label-text">${pinIcon}${step.label}</div>
+        `;
+
+        listEl.appendChild(item);
+
+        // 現在のステップを自動スクロールで視認しやすくする
+        if (idx === currentTimelineIndex) {
+            setTimeout(() => {
+                item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 100);
+        }
+    });
+}
+
+/**
+ * GM進行ボタンのテキストや状態を動的にアップデートする
+ */
+function updateGmTimelineButtons() {
+    const btnNext = document.getElementById('btn-next-step');
+    const btnPrev = document.getElementById('btn-prev-step');
+    if (!btnNext || !btnPrev) return;
+
+    // 「戻る」ボタンの制御（最初の待機状態なら非表示）
+    if (currentTimelineIndex === 0 && lastKnownPhase === 'waiting') {
+        btnPrev.style.display = 'none';
+    } else {
+        btnPrev.style.display = 'inline-block';
+    }
+
+    // 「次へ進む」ボタンのテキスト設定
+    if (lastKnownPhase === 'waiting') {
+        btnNext.textContent = 'ゲーム開始 (1限前休み 夜フェーズへ) ➔';
+    } else if (lastKnownPhase === 'night') {
+        const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+        const nextPeriod = nextStep ? nextStep.period : '次';
+        btnNext.textContent = `[${nextPeriod}] 朝フェーズへ (犠牲者発表) ➔`;
+    } else if (lastKnownPhase === 'morning') {
+        const currentStep = GAME_TIMELINE[currentTimelineIndex];
+        const currentPeriod = currentStep ? currentStep.period : '';
+        btnNext.textContent = `[${currentPeriod}] 朝を終了して議論を開始する ➔`;
+    } else if (lastKnownPhase === 'discussion') {
+        const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+        const nextPeriod = nextStep ? nextStep.period : '次';
+        btnNext.textContent = `[${nextPeriod}] 投票フェーズへ進む ➔`;
+    } else if (lastKnownPhase === 'voting') {
+        // 投票中か、結果表示中かで文言を変える
+        const voteResultOverlay = document.getElementById('vote-result-overlay');
+        if (voteResultOverlay && !voteResultOverlay.classList.contains('hidden')) {
+            const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+            if (nextStep) {
+                btnNext.textContent = `[${nextStep.period}] 次の夜フェーズへ進む ➔`;
+            } else {
+                btnNext.textContent = 'ゲーム終了判定へ ➔';
+            }
+        } else {
+            btnNext.textContent = '🗳️ 投票を強制締め切りする ➔';
+        }
+    } else if (lastKnownPhase === 'result') {
+        btnNext.textContent = 'ゲーム終了 (結果発表中)';
+        btnNext.style.opacity = '0.6';
+        btnNext.style.cursor = 'not-allowed';
+    }
 }
 
 // =============================================

@@ -94,45 +94,38 @@
             <!-- GMパネル -->
             <main id="gm-panel" class="card gm-panel hidden" style="margin-top: 2rem;">
                 <h3>GM コントロールパネル</h3>
-                <div class="button-group">
-                    <button id="btn-waiting" class="action-btn" onclick="handlePhaseChange('waiting')">待機中</button>
-                    <button class="action-btn" onclick="handlePhaseChange('discussion')">議論開始</button>
-                    <button class="action-btn" onclick="handlePhaseChange('voting')">投票開始</button>
-                    <button class="action-btn" onclick="handlePhaseChange('night')">夜フェーズ</button>
-                </div>
-                <!-- GM専用：朝フェーズへ進むボタン（夜フェーズ中のみ表示） -->
-                <div id="morning-start-area" class="hidden"
-                    style="margin-top: 1.5rem; border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 1.5rem;">
-                    <button class="action-btn" onclick="handlePhaseChange('morning')" style="width:100%;">
-                        🌅 朝フェーズへ進む（集計実行）
+                
+                <!-- タイムライン進行用の一本化されたボタン -->
+                <div style="display: flex; flex-direction: column; gap: 1rem; width: 100%;">
+                    <button id="btn-next-step" class="action-btn" style="width: 100%; padding: 1.4rem; font-size: 1.15rem; background: linear-gradient(135deg, #ff9e64, #f7768e); color: #111; font-weight: 900; box-shadow: 0 4px 15px rgba(255,158,100,0.3); border: none; outline: none; border-radius: 16px; cursor: pointer;" onclick="advanceTimeline(1)">
+                        次のフェーズへ進む ➔
                     </button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
+                        <button id="btn-prev-step" class="action-btn" style="padding: 0.6rem 1rem; font-size: 0.85rem; background: rgba(255,255,255,0.05); color: var(--text-color); border-radius: 12px; cursor: pointer;" onclick="advanceTimeline(-1)">
+                            ◀ 1手戻る
+                        </button>
+                        <!-- 強制終了（ロビーへ戻る） -->
+                        <button id="btn-reset" class="action-btn btn-danger" style="padding: 0.6rem 1rem; font-size: 0.85rem; border-radius: 12px; cursor: pointer;" onclick="resetGame()">ゲーム強制終了</button>
+                    </div>
                 </div>
-                <!-- GM専用：朝を終了して議論開始ボタン（朝フェーズ中のみ表示） -->
-                <div id="morning-end-area" class="hidden"
-                    style="margin-top: 1.5rem; border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 1.5rem;">
-                    <button class="action-btn" onclick="handlePhaseChange('discussion')" style="width:100%;">
-                        ☀️ 朝を終了して議論開始
-                    </button>
-                </div>
-                <!-- GM専用：投票締め切りボタン（投票フェーズ中のみ表示） -->
+
+                <!-- GM専用：手動投票締め切り（投票フェーズ中のみ表示） -->
                 <div id="vote-close-area" class="hidden"
-                    style="margin-top: 1.5rem; border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 1.5rem;">
-                    <button class="action-btn btn-vote-close" onclick="closeVoting()" style="width:100%;">🗳️
-                        投票を締め切る</button>
-                </div>
-                <div id="reset-area" class="hidden"
-                    style="margin-top: 1.5rem; border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 1.5rem;">
-                    <button id="btn-reset" class="action-btn btn-danger" onclick="resetGame()"
-                        style="width: 100%;">ゲーム強制終了 (ロビーへ戻る)</button>
+                    style="margin-top: 1.5rem; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 1rem;">
+                    <button class="action-btn btn-vote-close" onclick="closeVoting()" style="width:100%; font-size:0.9rem; padding:0.7rem; border-radius:10px;">
+                        🗳️ 投票を強制締め切りする
+                    </button>
                 </div>
             </main>
         </div>
 
-        <!-- 右サイドバー：将来の拡張用スペース -->
+        <!-- 右サイドバー：タイムテーブル -->
         <aside id="right-sidebar" class="sidebar right-sidebar">
-            <div class="sidebar-placeholder">
-                <h4>拡張スペース</h4>
-                <p>（将来の機能追加用）</p>
+            <div class="sidebar-header">
+                <h3>📅 タイムテーブル</h3>
+            </div>
+            <div id="timeline-list" class="timeline-list" style="max-height: calc(680px - 5rem); overflow-y: auto;">
+                <!-- JSでタイムスケジュールが動的に生成されます -->
             </div>
         </aside>
     </div>

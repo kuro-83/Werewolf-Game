@@ -1689,3 +1689,93 @@ body.theme-result-teruteru {
     white-space: pre-wrap;
     word-break: break-all;
 }
+
+/* =============================================
+   📅 タイムスケジュール・タイムライン用スタイル
+   ============================================= */
+.timeline-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    padding-right: 0.3rem;
+    box-sizing: border-box;
+}
+
+/* スクロールバーのカスタマイズ */
+.timeline-list::-webkit-scrollbar {
+    width: 6px;
+}
+.timeline-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 3px;
+}
+.timeline-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+.timeline-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.timeline-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.8rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    text-align: left;
+}
+
+/* 過去のステップ */
+.timeline-item.is-past {
+    opacity: 0.4;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+/* 現在のステップ (ハイライト) */
+.timeline-item.is-current {
+    background: rgba(122, 162, 247, 0.12);
+    border-color: var(--accent);
+    box-shadow: 0 0 12px rgba(122, 162, 247, 0.2);
+    transform: scale(1.02);
+}
+
+/* 未来のステップ */
+.timeline-item.is-future {
+    opacity: 0.85;
+}
+
+.timeline-period-badge {
+    align-self: flex-start;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    border-radius: 8px;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.08);
+    color: #c0caf5;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 現在のステップのバッジ */
+.timeline-item.is-current .timeline-period-badge {
+    background: rgba(122, 162, 247, 0.2);
+    color: var(--accent);
+    border-color: rgba(122, 162, 247, 0.4);
+}
+
+.timeline-label-text {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #c0caf5;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.timeline-item.is-current .timeline-label-text {
+    color: #fff;
+    font-size: 0.95rem;
+}
