@@ -245,7 +245,7 @@ async function updatePhaseDisplay(phase) {
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('night-action-overlay').classList.add('hidden');
                 document.getElementById('morning-overlay').classList.remove('hidden');
-                
+
                 // 昨晩の犠牲者の表示
                 showMorningVictims();
 
@@ -478,7 +478,7 @@ function renderMemoList() {
     currentPlayers.forEach(p => {
         const targetPlayerId = p.id;
         const key = `werewolf_memo_1_${myPlayerId}_${targetPlayerId}`;
-        
+
         let itemEl = document.getElementById(`memo-item-${targetPlayerId}`);
 
         if (!itemEl) {
@@ -487,7 +487,7 @@ function renderMemoList() {
             itemEl.id = `memo-item-${targetPlayerId}`;
             itemEl.dataset.playerId = targetPlayerId;
             itemEl.className = 'memo-item';
-            
+
             const nameDiv = document.createElement('div');
             nameDiv.className = 'memo-player-name';
             nameDiv.textContent = p.name;
@@ -497,14 +497,14 @@ function renderMemoList() {
             textarea.className = 'memo-textarea';
             textarea.placeholder = `${p.name} さんの考察メモ...`;
             textarea.value = localStorage.getItem(key) || '';
-            
+
             // 入力時に自動保存
             textarea.addEventListener('input', (e) => {
                 localStorage.setItem(key, e.target.value);
             });
 
             itemEl.appendChild(textarea);
-            
+
             // 新規作成時のみDOMの末尾に追加する（順序移動によるフォーカス外れを防ぐ）
             memoPlayerList.appendChild(itemEl);
 
@@ -545,9 +545,9 @@ function renderMemoList() {
 function toggleMobileMemo() {
     const sidebar = document.getElementById('left-sidebar');
     if (!sidebar) return;
-    
+
     const isShowing = sidebar.classList.toggle('show-mobile');
-    
+
     // 背面の暗幕オーバーレイの制御
     let overlay = document.getElementById('memo-mobile-overlay');
     if (isShowing) {
@@ -897,6 +897,7 @@ function checkAllVoted() {
  * GM手動締め切り
  */
 async function closeVoting() {
+    if (lastKnownPhase !== 'voting') return;
     if (!confirm('投票を締め切り、その時点の票で集計しますか？（未投票は棄権扱い）')) return;
     // 即座に投票ボタンを無効化（未投票プレイヤーの後入り投票を防ぐ）
     disableVoteButtons();
@@ -1896,7 +1897,7 @@ function setupGameView() {
     }
     // 人狼チャットボタンの表示制御
     updateWolfChatButtonVisibility();
-    
+
     startGameSync();
 }
 
@@ -2095,7 +2096,7 @@ function openHelpModal() {
         const header = document.createElement('div');
         header.className = 'accordion-header';
         header.innerHTML = `<span>${role.name}</span> <span class="accordion-badge ${ROLE_BADGE_CLASS[role.name]}">${role.faction}</span>`;
-        
+
         const body = document.createElement('div');
         body.className = 'accordion-body hidden';
         body.innerHTML = generateRoleHelpDetailsHtml(role);
@@ -2148,7 +2149,7 @@ function showRoleInfoModal(roleId) {
         const header = document.createElement('div');
         header.className = 'accordion-header';
         header.innerHTML = `<span>${r.name}</span> <span class="accordion-badge ${ROLE_BADGE_CLASS[r.name]}">${r.faction}</span>`;
-        
+
         const body = document.createElement('div');
         body.className = 'accordion-body';
         if (r.id !== roleId) {
@@ -2353,7 +2354,7 @@ function renderChatHistory(messages) {
 }
 
 function escapeHTML(str) {
-    return str.replace(/[&<>'"]/g, 
+    return str.replace(/[&<>'"]/g,
         tag => ({
             '&': '&amp;',
             '<': '&lt;',
@@ -2395,9 +2396,9 @@ async function advanceTimeline(offset) {
             nextPhase = 'voting';
         } else if (lastKnownPhase === 'voting') {
             // 投票中
-            // すでに投票結果が表示されている場合は次の夜へ進める
+            // すでに投票結果が表示されているか、集計完了している場合は次の夜へ進める
             const voteResultOverlay = document.getElementById('vote-result-overlay');
-            if (voteResultOverlay && !voteResultOverlay.classList.contains('hidden')) {
+            if (isCountingVotes || (voteResultOverlay && !voteResultOverlay.classList.contains('hidden'))) {
                 nextTimelineIndex = currentTimelineIndex + 1;
                 nextPhase = 'night';
             } else {
