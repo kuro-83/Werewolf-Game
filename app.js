@@ -1801,6 +1801,16 @@ async function resetGame() {
             .neq('name', 'dummy_string_for_reset_12345');
         if (resetError) throw resetError;
 
+        // 人狼チャット履歴を削除
+        try {
+            await supabaseClient
+                .from('werewolf_chat')
+                .delete()
+                .neq('message', 'dummy_string_for_reset_12345');
+        } catch (chatResetErr) {
+            console.warn('人狼チャット履歴の削除に失敗しました:', chatResetErr);
+        }
+
         // game_status を waiting に戻す
         const { error: phaseError } = await supabaseClient
             .from('game_status')
@@ -1877,6 +1887,16 @@ async function joinGame(role) {
                 event.currentTarget.innerHTML = originalText;
                 btns.forEach(btn => btn.disabled = false);
                 return;
+            }
+
+            // 人狼チャット履歴を削除
+            try {
+                await supabaseClient
+                    .from('werewolf_chat')
+                    .delete()
+                    .neq('message', 'dummy_string_for_reset_12345');
+            } catch (chatResetErr) {
+                console.warn('人狼チャット履歴の削除に失敗しました:', chatResetErr);
             }
         } else if (role === 'player') {
             const { error } = await supabaseClient
