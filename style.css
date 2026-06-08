@@ -1312,26 +1312,28 @@ body.theme-result-teruteru {
 /* 3カラムゲームレイアウト */
 .game-layout {
     display: grid;
-    grid-template-columns: 280px 500px 280px;
+    grid-template-columns: minmax(200px, 280px) minmax(320px, 500px) minmax(200px, 280px);
     justify-content: center;
     gap: 1.5rem;
-    width: 95%;
+    width: 100%;
     max-width: 1200px;
     margin: 0 auto;
     align-items: start;
     z-index: 10;
-    padding: 2rem 0;
+    padding: 2rem 1rem;
     box-sizing: border-box;
 }
 
-/* 中央メインコンテンツ（従来の container と同等の幅制限） */
+/* 中央メインコンテンツ（適度な幅をキープし、絶対に押しつぶされない） */
 .game-layout .main-content {
     display: flex;
     flex-direction: column;
     gap: 2rem;
     width: 100%;
     max-width: 500px;
+    min-width: 320px;
     margin: 0 auto;
+    flex-shrink: 0;
 }
 
 /* サイドバー（ガラスモルフィズム） */
@@ -1511,10 +1513,10 @@ body.theme-result-teruteru {
    レスポンシブデザイン（サイドバー）
    ============================================= */
 
-/* タブレットサイズ：右サイドバー非表示、2カラム化 */
-@media (max-width: 1100px) {
+/* タブレットサイズ：右サイドバー自動非表示、2カラム化 */
+@media (max-width: 1024px) {
     .game-layout {
-        grid-template-columns: 280px 500px;
+        grid-template-columns: minmax(200px, 280px) minmax(320px, 500px);
     }
     .right-sidebar {
         display: none !important;
@@ -1524,18 +1526,18 @@ body.theme-result-teruteru {
 /* スマホサイズ：1カラム、左サイドバーをドロワー(ポップアップ)化 */
 @media (max-width: 768px) {
     .game-layout {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+        display: block; /* flex/gridによるスタッキングコンテキスト発生を防ぐため block に変更 */
         padding: 1rem 0;
-        z-index: auto !important; /* スタッキングコンテキストの解除 */
+        z-index: auto !important;
     }
     
     .game-layout .main-content {
-        max-width: 100% !important;
-        width: 100%;
-        padding: 0 1rem;
+        max-width: 500px;
+        width: calc(100% - 2rem);
+        padding: 0;
         box-sizing: border-box;
+        margin: 0 auto;
+        min-width: 0; /* スマホでは画面サイズに合わせてさらに縮小できるように */
     }
 
     /* 左サイドバーを画面外ドロワーに変更 */
