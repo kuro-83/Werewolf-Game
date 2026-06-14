@@ -44,33 +44,33 @@ let voteCountdownTimer = null;  // カウントダウンタイマー ID
 // タイムスケジュール（タイムライン）定義
 // =============================================
 const GAME_TIMELINE = [
-  { period: "朝礼", phase: "waiting", label: "ルール説明" },
-  { period: "1限前休み", phase: "night", label: "【1日目】1日目夜！" },
-  { period: "2限前休み", phase: "morning", label: "【2日目】朝の生存確認" },
-  { period: "2限前休み", phase: "discussion", label: "【2日目】昼の議論" },
-  { period: "2限前休み", phase: "voting", label: "【2日目】投票" },
-  { period: "2限前休み", phase: "night", label: "【2日目】夜の襲撃" },
-  { period: "3限前休み", phase: "morning", label: "【3日目】朝の生存確認" },
-  { period: "3限前休み", phase: "discussion", label: "【3日目】昼の議論" },
-  { period: "3限前休み", phase: "voting", label: "【3日目】投票" },
-  { period: "3限前休み", phase: "night", label: "【3日目】夜の襲撃" },
-  { period: "昼休み(前半)", phase: "morning", label: "【4日目】朝の生存確認" },
-  { period: "昼休み(前半)", phase: "discussion", label: "【4日目】昼の議論" },
-  { period: "昼休み(前半)", phase: "voting", label: "【4日目】投票" },
-  { period: "昼休み(前半)", phase: "night", label: "【4日目】夜の襲撃" },
-  { period: "昼休み(中盤)", phase: "morning", label: "【5日目】朝の生存確認" },
-  { period: "昼休み(中盤)", phase: "discussion", label: "【5日目】大議論フェーズ！！" },
-  { period: "昼休み(後半)", phase: "voting", label: "【5日目】投票" },
-  { period: "昼休み(後半)", phase: "night", label: "【5日目】夜の襲撃" },
-  { period: "5限前休み", phase: "morning", label: "【6日目】朝の生存確認" },
-  { period: "5限前休み", phase: "discussion", label: "【6日目】昼の議論" },
-  { period: "5限前休み", phase: "voting", label: "【6日目】投票" },
-  { period: "5限前休み", phase: "night", label: "【6日目】夜の襲撃" },
-  { period: "6限前休み", phase: "morning", label: "【7日目】朝の生存確認" },
-  { period: "6限前休み", phase: "discussion", label: "【7日目】昼の議論" },
-  { period: "6限前休み", phase: "voting", label: "【7日目】投票" },
-  { period: "6限前休み", phase: "night", label: "【7日目】夜の襲撃" },
-  { period: "終礼", phase: "result", label: "結果発表・ネタばらし！" }
+    { period: "朝礼", phase: "waiting", label: "ルール説明" },
+    { period: "1限前休み", phase: "night", label: "【1日目】1日目夜！" },
+    { period: "2限前休み", phase: "morning", label: "【2日目】朝の生存確認" },
+    { period: "2限前休み", phase: "discussion", label: "【2日目】昼の議論" },
+    { period: "2限前休み", phase: "voting", label: "【2日目】投票" },
+    { period: "2限前休み", phase: "night", label: "【2日目】夜の襲撃" },
+    { period: "3限前休み", phase: "morning", label: "【3日目】朝の生存確認" },
+    { period: "3限前休み", phase: "discussion", label: "【3日目】昼の議論" },
+    { period: "3限前休み", phase: "voting", label: "【3日目】投票" },
+    { period: "3限前休み", phase: "night", label: "【3日目】夜の襲撃" },
+    { period: "昼休み(前半)", phase: "morning", label: "【4日目】朝の生存確認" },
+    { period: "昼休み(前半)", phase: "discussion", label: "【4日目】昼の議論" },
+    { period: "昼休み(前半)", phase: "voting", label: "【4日目】投票" },
+    { period: "昼休み(前半)", phase: "night", label: "【4日目】夜の襲撃" },
+    { period: "昼休み(中盤)", phase: "morning", label: "【5日目】朝の生存確認" },
+    { period: "昼休み(中盤)", phase: "discussion", label: "【5日目】大議論フェーズ！！" },
+    { period: "昼休み(後半)", phase: "voting", label: "【5日目】投票" },
+    { period: "昼休み(後半)", phase: "night", label: "【5日目】夜の襲撃" },
+    { period: "5限前休み", phase: "morning", label: "【6日目】朝の生存確認" },
+    { period: "5限前休み", phase: "discussion", label: "【6日目】昼の議論" },
+    { period: "5限前休み", phase: "voting", label: "【6日目】投票" },
+    { period: "5限前休み", phase: "night", label: "【6日目】夜の襲撃" },
+    { period: "6限前休み", phase: "morning", label: "【7日目】朝の生存確認" },
+    { period: "6限前休み", phase: "discussion", label: "【7日目】昼の議論" },
+    { period: "6限前休み", phase: "voting", label: "【7日目】投票" },
+    { period: "6限前休み", phase: "night", label: "【7日目】夜の襲撃" },
+    { period: "終礼", phase: "result", label: "結果発表・ネタばらし！" }
 ];
 
 let currentTimelineIndex = 0;
@@ -605,6 +605,7 @@ function toggleMobileMemo() {
 function checkWinCondition() {
     if (myRoleType !== 'gm') return;
     if (lastKnownPhase === 'waiting' || lastKnownPhase === 'result' || resultShown) return;
+    if (_pendingWinner) return; // すでに勝者が確定済みのため再トリガーしない
 
     const playersWithRole = currentPlayers.filter(p => p.role);
     if (playersWithRole.length === 0) return;
@@ -621,24 +622,20 @@ function checkWinCondition() {
 }
 
 async function triggerGameEnd(winner) {
-    if (resultShown) return;
-    resultShown = true;
+    if (_pendingWinner) return; // すでに勝者が確定済みのためスキップ
 
-    console.log(`[WIN] ${winner} wins!`);
+    _pendingWinner = winner;
+    console.log(`[WIN] ${winner} wins! (GMが次へ進むまでリザルト画面は非表示)`);
 
+    // current_phase は変えない。winner のみ書き込み、リザルト遷移は GM の操作に委ねる
     try {
         const { error } = await supabaseClient
             .from('game_status')
-            .update({ current_phase: 'result', winner: winner })
+            .update({ winner: winner })
             .eq('id', 1);
 
         if (error) {
-            console.warn('winner フィールドの更新に失敗。current_phase のみ更新します:', error);
-            await supabaseClient
-                .from('game_status')
-                .update({ current_phase: 'result' })
-                .eq('id', 1);
-            _pendingWinner = winner;
+            console.warn('winner フィールドの書き込みに失敗しました:', error);
         }
     } catch (err) {
         console.error('ゲーム終了処理エラー:', err);
@@ -2427,6 +2424,13 @@ async function advanceTimeline(offset) {
     if (myRoleType !== 'gm') return;
 
     if (offset === 1) {
+        // 【バグ2修正】勝者がすでに確定している場合は終礼（resultフェーズ）へ強制ジャンプ
+        if (_pendingWinner) {
+            const finalIndex = GAME_TIMELINE.length - 1;
+            await handlePhaseChange('result', finalIndex);
+            return;
+        }
+
         let nextPhase = '';
         let nextTimelineIndex = currentTimelineIndex;
 
@@ -2439,7 +2443,8 @@ async function advanceTimeline(offset) {
             nextTimelineIndex = currentTimelineIndex + 1;
             nextPhase = 'morning';
         } else if (lastKnownPhase === 'morning') {
-            // 朝 -> 議論（タイムスケジュールインデックスは進めず、フェーズのみ進行）
+            // 【バグ1修正】朝 -> 議論（タイムスケジュールを1ステップ素直に進める）
+            nextTimelineIndex = currentTimelineIndex + 1;
             nextPhase = 'discussion';
         } else if (lastKnownPhase === 'discussion') {
             // 議論 -> 投票（タイムスケジュール上の次の枠に進み、投票フェーズを開始）
@@ -2487,7 +2492,8 @@ async function advanceTimeline(offset) {
             prevTimelineIndex = currentTimelineIndex - 1;
             prevPhase = 'night';
         } else if (lastKnownPhase === 'discussion') {
-            // 議論 -> 朝（タイムスケジュールはそのまま）
+            // 議論 -> 朝（タイムスケジュールを1つ戻す）
+            prevTimelineIndex = currentTimelineIndex - 1;
             prevPhase = 'morning';
         } else if (lastKnownPhase === 'voting') {
             // 投票 -> 議論（タイムスケジュールを1つ戻す）
@@ -2552,6 +2558,15 @@ function updateGmTimelineButtons() {
     const btnPrev = document.getElementById('btn-prev-step');
     if (!btnNext || !btnPrev) return;
 
+    // 【バグ2修正】勝者が確定済み（まだ result フェーズになっていない）場合は強制ジャンプボタンを表示
+    if (_pendingWinner && lastKnownPhase !== 'result') {
+        btnNext.textContent = '⚔️ 勝利確定！→ 終礼（結果発表）へジャンプ ➔';
+        btnNext.style.opacity = '';
+        btnNext.style.cursor = '';
+        btnPrev.style.display = 'none';
+        return;
+    }
+
     // 「戻る」ボタンの制御（最初の待機状態なら非表示）
     if (currentTimelineIndex === 0 && lastKnownPhase === 'waiting') {
         btnPrev.style.display = 'none';
@@ -2559,7 +2574,10 @@ function updateGmTimelineButtons() {
         btnPrev.style.display = 'inline-block';
     }
 
-    // 「次へ進む」ボタンのテキスト設定
+    // 「次へ進む」ボタンのテキスト設定（opacityなどのインラインスタイルを念のためリセット）
+    btnNext.style.opacity = '';
+    btnNext.style.cursor = '';
+
     if (lastKnownPhase === 'waiting') {
         btnNext.textContent = 'ゲーム開始 (1限前休み 夜フェーズへ) ➔';
     } else if (lastKnownPhase === 'night') {
@@ -2567,9 +2585,9 @@ function updateGmTimelineButtons() {
         const nextPeriod = nextStep ? nextStep.period : '次';
         btnNext.textContent = `[${nextPeriod}] 朝フェーズへ (犠牲者発表) ➔`;
     } else if (lastKnownPhase === 'morning') {
-        const currentStep = GAME_TIMELINE[currentTimelineIndex];
-        const currentPeriod = currentStep ? currentStep.period : '';
-        btnNext.textContent = `[${currentPeriod}] 朝を終了して議論を開始する ➔`;
+        const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+        const nextPeriod = nextStep ? nextStep.period : '次';
+        btnNext.textContent = `[${nextPeriod}] 朝を終了して議論を開始する ➔`;
     } else if (lastKnownPhase === 'discussion') {
         const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
         const nextPeriod = nextStep ? nextStep.period : '次';

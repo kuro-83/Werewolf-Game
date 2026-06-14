@@ -811,24 +811,45 @@ body.theme-result-teruteru {
    アニメーション
    ============================================= */
 @keyframes pop {
-    0% { transform: scale(1); }
+    0% {
+        transform: scale(1);
+    }
+
     50% {
         transform: scale(1.05);
         color: var(--accent);
         text-shadow: 0 0 40px var(--accent);
     }
-    100% { transform: scale(1); }
+
+    100% {
+        transform: scale(1);
+    }
 }
 
 @keyframes popIn {
-    0% { transform: scale(0.5); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 @keyframes pulse {
-    0% { opacity: 0.6; }
-    50% { opacity: 1; }
-    100% { opacity: 0.6; }
+    0% {
+        opacity: 0.6;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0.6;
+    }
 }
 
 @keyframes resultEntrance {
@@ -836,10 +857,12 @@ body.theme-result-teruteru {
         transform: scale(0.7) translateY(40px);
         opacity: 0;
     }
+
     60% {
         transform: scale(1.03) translateY(-5px);
         opacity: 1;
     }
+
     100% {
         transform: scale(1) translateY(0);
         opacity: 1;
@@ -847,13 +870,25 @@ body.theme-result-teruteru {
 }
 
 @keyframes floatIcon {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-10px); }
+
+    0%,
+    100% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
 }
 
 @keyframes shimmer {
-    0% { background-position: -200% center; }
-    100% { background-position: 200% center; }
+    0% {
+        background-position: -200% center;
+    }
+
+    100% {
+        background-position: 200% center;
+    }
 }
 
 .update-anim {
@@ -1077,8 +1112,17 @@ body.theme-result-teruteru {
 }
 
 @keyframes countdownPulse {
-    0%, 100% { transform: scale(1); opacity: 0.6; }
-    50% { transform: scale(1.05); opacity: 1; }
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 0.6;
+    }
+
+    50% {
+        transform: scale(1.05);
+        opacity: 1;
+    }
 }
 
 
@@ -1206,14 +1250,18 @@ body.theme-result-teruteru {
     font-weight: 700;
 }
 
-.role-help-summary, .role-help-details, .role-help-win {
+.role-help-summary,
+.role-help-details,
+.role-help-win {
     font-size: 0.9rem;
     margin: 0;
     line-height: 1.4;
     color: #a9b1d6;
 }
 
-.role-help-summary strong, .role-help-details strong, .role-help-win strong {
+.role-help-summary strong,
+.role-help-details strong,
+.role-help-win strong {
     color: #c0caf5;
 }
 
@@ -1291,8 +1339,13 @@ body.theme-result-teruteru {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 /* GM用ℹ️ボタン */
@@ -1318,7 +1371,8 @@ body.theme-result-teruteru {
     width: 100%;
     max-width: 1350px;
     margin: 0 auto;
-    align-items: stretch; /* stretchにして高さを引き揃える */
+    align-items: stretch;
+    /* stretchにして高さを引き揃える */
     z-index: 10;
     padding: 4rem 1.5rem;
     box-sizing: border-box;
@@ -1345,7 +1399,7 @@ body.theme-result-teruteru {
 }
 
 /* メインコンテンツ内のカードを縦に引き伸ばし、内部を上下中央寄せにする */
-.game-layout .main-content > .card {
+.game-layout .main-content>.card {
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -1394,7 +1448,8 @@ body.theme-result-teruteru {
     cursor: pointer;
     line-height: 1;
     padding: 0 0.5rem;
-    display: none; /* デフォルト非表示 */
+    display: none;
+    /* デフォルト非表示 */
     transition: color 0.2s;
 }
 
@@ -1414,7 +1469,8 @@ body.theme-result-teruteru {
     cursor: pointer;
     transition: all 0.2s ease;
     margin-top: 0.5rem;
-    display: none; /* デフォルト非表示 */
+    display: none;
+    /* デフォルト非表示 */
     align-items: center;
     gap: 0.3rem;
 }
@@ -1534,16 +1590,22 @@ body.theme-result-teruteru {
 @media (max-width: 1024px) {
     .game-layout {
         grid-template-columns: minmax(180px, 240px) minmax(320px, 800px);
-        height: auto; /* 高さを自動に戻す */
+        height: auto;
+        /* 高さを自動に戻す */
     }
+
     .left-sidebar,
     .right-sidebar,
     .game-layout .main-content {
-        height: auto; /* 高さを自動に戻す */
+        height: auto;
+        /* 高さを自動に戻す */
     }
-    .game-layout .main-content > .card {
-        flex: none; /* 自動縦伸びを解除 */
+
+    .game-layout .main-content>.card {
+        flex: none;
+        /* 自動縦伸びを解除 */
     }
+
     .right-sidebar {
         display: none !important;
     }
@@ -1552,31 +1614,37 @@ body.theme-result-teruteru {
 /* スマホサイズ：1カラム、左サイドバーをドロワー(ポップアップ)化 */
 @media (max-width: 768px) {
     .game-layout {
-        display: block; /* flex/gridによるスタッキングコンテキスト発生を防ぐため block に変更 */
+        display: block;
+        /* flex/gridによるスタッキングコンテキスト発生を防ぐため block に変更 */
         padding: 2.2rem 0;
         z-index: auto !important;
     }
-    
+
     .game-layout .main-content {
-        max-width: 100% !important; /* スマホでは画面いっぱいにどっしりと表示 */
+        max-width: 100% !important;
+        /* スマホでは画面いっぱいにどっしりと表示 */
         width: calc(100% - 2rem);
         padding: 0;
         box-sizing: border-box;
         margin: 0 auto;
-        min-width: 0; /* スマホでは画面サイズに合わせてさらに縮小できるように */
+        min-width: 0;
+        /* スマホでは画面サイズに合わせてさらに縮小できるように */
     }
 
     /* 左サイドバーを通常時非表示にし、スペースを占有させない */
     .left-sidebar {
-        display: none !important; /* スマホの通常時は完全に非表示にして見えない壁を完全排除 */
+        display: none !important;
+        /* スマホの通常時は完全に非表示にして見えない壁を完全排除 */
         position: fixed;
         top: 0;
-        left: -320px; /* 画面の左外に隠す */
+        left: -320px;
+        /* 画面の左外に隠す */
         width: 300px;
         height: 100vh;
         max-height: 100vh;
         border-radius: 0 24px 24px 0;
-        z-index: 21000 !important; /* 暗幕オーバーレイ(20500)より手前に配置 */
+        z-index: 21000 !important;
+        /* 暗幕オーバーレイ(20500)より手前に配置 */
         box-sizing: border-box;
         transition: left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
         box-shadow: 5px 0 25px rgba(0, 0, 0, 0.6);
@@ -1591,7 +1659,8 @@ body.theme-result-teruteru {
 
     /* ドロワー表示中のクラス */
     .left-sidebar.show-mobile {
-        display: block !important; /* ドロワーを開いたときだけ表示 */
+        display: block !important;
+        /* ドロワーを開いたときだけ表示 */
         left: 0;
     }
 
@@ -1601,7 +1670,7 @@ body.theme-result-teruteru {
     }
 
     /* スマホ用メインカードの最小高さと配置調整（縦潰れを防ぎ、中身を中央寄せにする） */
-    .game-layout .main-content > .card {
+    .game-layout .main-content>.card {
         min-height: 500px;
         display: flex;
         flex-direction: column;
@@ -1617,7 +1686,7 @@ body.theme-result-teruteru {
     .toggle-memo-btn {
         display: inline-flex !important;
     }
-    
+
     /* ドロワー開閉時の背面タップで閉じるための暗幕オーバーレイが欲しい場合用の定義（JSで制御） */
     .memo-mobile-overlay {
         position: fixed;
@@ -1669,11 +1738,13 @@ body.theme-result-teruteru {
 }
 
 .chat-msg.is-gm .chat-msg-sender {
-    color: #ff9e64; /* GMはオレンジ */
+    color: #ff9e64;
+    /* GMはオレンジ */
 }
 
 .chat-msg.is-wolf .chat-msg-sender {
-    color: #f7768e; /* 人狼は赤ピンク */
+    color: #f7768e;
+    /* 人狼は赤ピンク */
 }
 
 .chat-msg-time {
@@ -1705,14 +1776,17 @@ body.theme-result-teruteru {
 .timeline-list::-webkit-scrollbar {
     width: 6px;
 }
+
 .timeline-list::-webkit-scrollbar-track {
     background: rgba(255, 255, 255, 0.02);
     border-radius: 3px;
 }
+
 .timeline-list::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 3px;
 }
+
 .timeline-list::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.2);
 }
