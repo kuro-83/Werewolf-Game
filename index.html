@@ -69,7 +69,14 @@
                 <!-- プレイヤー：あなたの役職表示 -->
                 <div id="my-role-area" class="my-role-display hidden">
                     <div class="my-role-title">あなたの役職</div>
-                    <div id="my-role-name" class="my-role-name">確認中...</div>
+                    <div class="role-reveal-wrapper" id="role-reveal-wrapper" onclick="toggleRoleReveal()">
+                        <div id="my-role-name" class="my-role-name">確認中...</div>
+                        <div id="role-cover" class="role-cover">
+                            <div class="role-cover-icon">👁️</div>
+                            <div class="role-cover-text">タップして役職を確認</div>
+                            <div class="role-cover-sub">隣の人に見られないよう隠しています</div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 待機中：役職設定 (GM専用) -->
@@ -101,6 +108,8 @@
                 <section id="player-list-area" class="player-list-area hidden">
                     <h3>参加中のプレイヤー</h3>
                     <div id="gm-hint" class="gm-hint hidden">人狼の行動を待っています...</div>
+                    <!-- GM専用: 夜フェーズ行動状況インジケーター -->
+                    <div id="night-action-status" class="night-action-status hidden"></div>
                     <div id="player-list" class="player-list"></div>
                 </section>
             </header>

@@ -1931,3 +1931,153 @@ body.theme-result-teruteru {
     background: #ff9e64;
     box-shadow: 0 0 8px rgba(255, 158, 100, 0.5);
 }
+
+/* =============================================
+   👁️ 役職覗き見防止（タップで表示カバー）
+   ============================================= */
+
+.role-reveal-wrapper {
+    position: relative;
+    cursor: pointer;
+    border-radius: 12px;
+    overflow: hidden;
+    min-height: 3.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 0.15rem;
+}
+
+/* 未表示時：役職名をぼかす */
+.role-reveal-wrapper:not(.is-revealed) #my-role-name {
+    filter: blur(10px);
+    user-select: none;
+    pointer-events: none;
+}
+
+/* 表示時：ブラーを解除 */
+.role-reveal-wrapper.is-revealed #my-role-name {
+    filter: none;
+    transition: filter 0.25s ease;
+}
+
+/* カバーオーバーレイ本体 */
+.role-cover {
+    position: absolute;
+    inset: 0;
+    background: rgba(8, 8, 18, 0.84);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.22rem;
+    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.16);
+    transition: opacity 0.28s ease, transform 0.28s ease;
+    z-index: 5;
+}
+
+/* 表示中はカバーをフェードアウト */
+.role-reveal-wrapper.is-revealed .role-cover {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(1.04);
+}
+
+.role-cover-icon {
+    font-size: 1.35rem;
+    line-height: 1;
+}
+
+.role-cover-text {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.88);
+    letter-spacing: 0.02em;
+}
+
+.role-cover-sub {
+    font-size: 0.67rem;
+    color: rgba(255, 255, 255, 0.35);
+}
+
+/* =============================================
+   🌙 GM用夜フェーズ行動状況インジケーター
+   ============================================= */
+
+.night-action-status {
+    margin-bottom: 0.75rem;
+    padding: 0.75rem 0.9rem;
+    background: rgba(122, 162, 247, 0.04);
+    border: 1px solid rgba(122, 162, 247, 0.15);
+    border-radius: 12px;
+    text-align: left;
+}
+
+.night-status-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.night-status-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #7aa2f7;
+}
+
+.night-status-count {
+    font-size: 0.77rem;
+    color: rgba(255, 255, 255, 0.42);
+}
+
+.night-status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.night-status-item {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.79rem;
+    padding: 0.2rem 0.35rem;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.night-status-item.pending {
+    background: rgba(247, 118, 142, 0.07);
+}
+
+.night-status-item.acted {
+    opacity: 0.58;
+}
+
+.night-status-icon {
+    width: 1.2rem;
+    text-align: center;
+    font-size: 0.84rem;
+    flex-shrink: 0;
+}
+
+.night-status-name {
+    color: #c0caf5;
+    font-weight: 700;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.night-status-role {
+    color: rgba(255, 255, 255, 0.36);
+    font-size: 0.72rem;
+    font-style: italic;
+    flex-shrink: 0;
+}

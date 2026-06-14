@@ -1,4 +1,4 @@
-console.log("【最新版 2026/06/14 22:35】シークレット投票機能 実装済み");
+console.log("【最新版 2026/06/14 22:50】衋き見防止＆夜アクション可視化 実装済み");
 
 /* =============================================
    人狼ゲーム管理 - アプリケーションロジック (app.js)
@@ -167,6 +167,9 @@ async function updatePhaseDisplay(phase) {
     lastKnownPhase = phase;
     const displayName = phaseNames[phase] || phase;
 
+    // フェーズ変更時に役職カバーをリセット（覗き見防止）
+    resetRoleCover();
+
     if (phaseElement.textContent !== displayName) {
         phaseElement.textContent = displayName;
         phaseElement.classList.remove('update-anim');
@@ -192,6 +195,9 @@ async function updatePhaseDisplay(phase) {
     } else {
         gmHint.classList.add('hidden');
     }
+
+    // GM用夜フェーズ行動状況インジケーターを更新
+    renderNightActionStatus();
 
     if (phase === 'waiting') {
         const chatLog = document.getElementById('wolf-chat-log');
@@ -2017,7 +2023,7 @@ async function startGameSync() {
         // role・vote_target_id を含めて取得
         const playersRes = await supabaseClient
             .from('players')
-            .select('id, name, is_alive, role, vote_target_id');
+            .select('id, name, is_alive, role, vote_target_id, night_target_id');
         if (playersRes.error) throw playersRes.error;
 
         currentPlayers = playersRes.data ? playersRes.data : [];
@@ -2092,6 +2098,11 @@ async function startGameSync() {
                 }
                 renderPlayerList();
                 renderMemoList();
+
+                // GM用夜フェーズ行動状況インジケーターを更新
+                if (lastKnownPhase === 'night' && myRoleType === 'gm') {
+                    renderNightActionStatus();
+                }
 
                 // 朝フェーズ中の場合、犠牲者の表示を更新
                 if (lastKnownPhase === 'morning') {
@@ -2510,6 +2521,71 @@ async function onHideVoteDetailsChange() {
         console.error('シークレット投票設定の更新エラー:', err);
         checkbox.checked = !newValue; // 失敗時はUIを元に戻す
     }
+}
+
+// =============================================
+// 👁️ 役職砉き見防止
+// =============================================
+
+/**
+ * 役職カバーのON/OFFを切り替える（プレイヤー画面）
+ */
+function toggleRoleReveal() {
+    const wrapper = document.getElementById('role-reveal-wrapper');
+    if (!wrapper) return;
+    wrapper.classList.toggle('is-revealed');
+}
+
+/**
+ * フェーズ変更時に役職カバーを元に戻す
+ */
+function resetRoleCover() {
+    const wrapper = document.getElementById('role-reveal-wrapper');
+    if (wrapper) {
+        wrapper.classList.remove('is-revealed');
+    }
+}
+
+// =============================================
+// 🌙 GM用夜フェーズ行動状況インジケーター
+// =============================================
+
+/**
+ * GM専用: 夜フェーズ中に各プレイヤーの行動完了状況を描画する
+ */
+function renderNightActionStatus() {
+    const NIGHT_ACTION_ROLES = ['人狼', '預言者', '霊媒師', '騎士'];
+    const statusEl = document.getElementById('night-action-status');
+    if (!statusEl) return;
+
+    if (myRoleType !== 'gm' || lastKnownPhase !== 'night') {
+        statusEl.classList.add('hidden');
+        return;
+    }
+
+    const alivePlayers = currentPlayers.filter(p => p.is_alive && p.role);
+    if (alivePlayers.length === 0) {
+        statusEl.classList.add('hidden');
+        return;
+    }
+
+    statusEl.classList.remove('hidden');
+
+    const acted = alivePlayers.filter(p => !NIGHT_ACTION_ROLES.includes(p.role) || !!p.night_target_id).length;
+    const total = alivePlayers.length;
+
+    let html = `<div class="night-status-header"><span class="night-status-title">🌙 夜の行動状況</span><span class="night-status-count">${acted} / ${total}人 完了</span></div><div class="night-status-list">`;
+
+    alivePlayers.forEach(p => {
+        const needsAction = NIGHT_ACTION_ROLES.includes(p.role);
+        const hasActed = !needsAction || !!p.night_target_id;
+        const icon = hasActed ? '✅' : '⏳';
+        const statusClass = hasActed ? 'acted' : 'pending';
+        html += `<div class="night-status-item ${statusClass}"><span class="night-status-icon">${icon}</span><span class="night-status-name">${p.name}</span><span class="night-status-role">${needsAction ? p.role : '（行動なし）'}</span></div>`;
+    });
+
+    html += '</div>';
+    statusEl.innerHTML = html;
 }
 
 // =============================================
