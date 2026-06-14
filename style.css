@@ -524,6 +524,20 @@ body.theme-result-teruteru {
     text-shadow: none;
 }
 
+/* --------- 夜フェーズ用インラインコンテナ（3カラム維持用） --------- */
+.night-action-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    margin-top: 2rem;
+    pointer-events: all;
+}
+
+.night-action-container.hidden {
+    display: none !important;
+}
+
 /* --------- 夜フェーズオーバーレイ（生存者用） --------- */
 .night-overlay {
     position: fixed;

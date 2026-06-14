@@ -147,6 +147,55 @@
                     </button>
                 </div>
             </main>
+
+            <!-- 夜フェーズ（生存者）UI -->
+            <div id="night-action-overlay" class="night-action-container hidden">
+                <!-- 人狼以外の待機画面 -->
+                <div id="night-waiting" class="night-content hidden">
+                    <h2>夜が訪れました</h2>
+                    <p style="color:#c0caf5;">人狼が暗躍しています。<br>静かに朝を待ちましょう…</p>
+                </div>
+
+                <!-- 人狼用の襲撃画面 -->
+                <div id="night-wolf" class="night-content hidden">
+                    <h2 style="color: #f7768e;">襲撃ターゲット選択</h2>
+                    <p style="color:#c0caf5;">今夜、誰を襲撃しますか？</p>
+                    <div id="wolf-target-list" class="target-list"></div>
+                    <button type="button" id="btn-wolf-attack" class="target-btn"
+                        style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#f7768e,#ff9e64); display:none;"
+                        onclick="submitAttack()">🔪 襲撃する</button>
+                </div>
+
+                <!-- 占い師用の占い画面 -->
+                <div id="night-seer" class="night-content hidden">
+                    <h2 style="color: #bb9af7;">🔮 占いターゲット選択</h2>
+                    <p style="color:#c0caf5;">今夜、誰を占いますか？</p>
+                    <div id="seer-target-list" class="target-list"></div>
+                    <button type="button" id="btn-seer-divinate" class="target-btn"
+                        style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#bb9af7,#7aa2f7); display:none;"
+                        onclick="submitDivination()">🔮 占う</button>
+                </div>
+
+                <!-- 霊媒師用の霊媒画面 -->
+                <div id="night-medium" class="night-content hidden">
+                    <h2 style="color: #73daca;">🔮 霊媒ターゲット選択</h2>
+                    <p style="color:#c0caf5;">今夜、誰を霊媒しますか？（死亡者から選択）</p>
+                    <div id="medium-target-list" class="target-list"></div>
+                    <button type="button" id="btn-medium-action" class="target-btn"
+                        style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#73daca,#2ac3de); display:none;"
+                        onclick="submitMedium()">🔮 霊媒する</button>
+                </div>
+
+                <!-- 騎士用の守護画面 -->
+                <div id="night-knight" class="night-content hidden">
+                    <h2 style="color: #a78bfa;">🛡️ 守護ターゲット選択</h2>
+                    <p style="color:#c0caf5;">今夜、誰を守りますか？</p>
+                    <div id="knight-target-list" class="target-list"></div>
+                    <button type="button" id="btn-knight-action" class="target-btn"
+                        style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#a78bfa,#7aa2f7); display:none;"
+                        onclick="submitKnightGuard()">🛡️ 守る</button>
+                </div>
+            </div>
         </div>
 
         <!-- 右サイドバー：タイムテーブル -->
@@ -191,54 +240,7 @@
         <div class="ghost-message">あなたは死亡しました<small>( 観戦モード )</small></div>
     </div>
 
-    <!-- 夜フェーズ（生存者）オーバーレイ -->
-    <div id="night-action-overlay" class="night-overlay hidden">
-        <!-- 人狼以外の待機画面 -->
-        <div id="night-waiting" class="night-content hidden">
-            <h2>夜が訪れました</h2>
-            <p style="color:#c0caf5;">人狼が暗躍しています。<br>静かに朝を待ちましょう…</p>
-        </div>
 
-        <!-- 人狼用の襲撃画面 -->
-        <div id="night-wolf" class="night-content hidden">
-            <h2 style="color: #f7768e;">襲撃ターゲット選択</h2>
-            <p style="color:#c0caf5;">今夜、誰を襲撃しますか？</p>
-            <div id="wolf-target-list" class="target-list"></div>
-            <button type="button" id="btn-wolf-attack" class="target-btn"
-                style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#f7768e,#ff9e64); display:none;"
-                onclick="submitAttack()">🔪 襲撃する</button>
-        </div>
-
-        <!-- 占い師用の占い画面 -->
-        <div id="night-seer" class="night-content hidden">
-            <h2 style="color: #bb9af7;">🔮 占いターゲット選択</h2>
-            <p style="color:#c0caf5;">今夜、誰を占いますか？</p>
-            <div id="seer-target-list" class="target-list"></div>
-            <button type="button" id="btn-seer-divinate" class="target-btn"
-                style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#bb9af7,#7aa2f7); display:none;"
-                onclick="submitDivination()">🔮 占う</button>
-        </div>
-
-        <!-- 霊媒師用の霊媒画面 -->
-        <div id="night-medium" class="night-content hidden">
-            <h2 style="color: #73daca;">🔮 霊媒ターゲット選択</h2>
-            <p style="color:#c0caf5;">今夜、誰を霊媒しますか？（死亡者から選択）</p>
-            <div id="medium-target-list" class="target-list"></div>
-            <button type="button" id="btn-medium-action" class="target-btn"
-                style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#73daca,#2ac3de); display:none;"
-                onclick="submitMedium()">🔮 霊媒する</button>
-        </div>
-
-        <!-- 騎士用の守護画面 -->
-        <div id="night-knight" class="night-content hidden">
-            <h2 style="color: #a78bfa;">🛡️ 守護ターゲット選択</h2>
-            <p style="color:#c0caf5;">今夜、誰を守りますか？</p>
-            <div id="knight-target-list" class="target-list"></div>
-            <button type="button" id="btn-knight-action" class="target-btn"
-                style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#a78bfa,#7aa2f7); display:none;"
-                onclick="submitKnightGuard()">🛡️ 守る</button>
-        </div>
-    </div>
 
     <!-- ======================================
          投票アクションオーバーレイ（生存プレイヤー用）
