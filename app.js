@@ -1,4 +1,4 @@
-console.log("【最新版 2026/06/14 22:50】衋き見防止＆夜アクション可視化 実装済み");
+console.log("【最新版 2026/06/14 23:25】役職確認フェーズ追加のみ（仕切り直し）");
 
 /* =============================================
    人狼ゲーム管理 - アプリケーションロジック (app.js)
@@ -48,6 +48,7 @@ let hideVoteDetails = false;   // シークレット投票フラグ（Supabase g
 // =============================================
 const GAME_TIMELINE = [
     { period: "朝礼", phase: "waiting", label: "ルール説明" },
+    { period: "朝礼", phase: "confirm_role", label: "役職の確認" }, // ★これを追加
     { period: "1限前休み", phase: "night", label: "【1日目】1日目夜！" },
     { period: "2限前休み", phase: "morning", label: "【2日目】朝の生存確認" },
     { period: "2限前休み", phase: "discussion", label: "【2日目】昼の議論" },
@@ -83,6 +84,7 @@ let currentTimelineIndex = 0;
 // =============================================
 const phaseNames = {
     'waiting': '待機中',
+    'confirm_role': '役職確認',
     'morning': '朝フェーズ',
     'discussion': '議論中',
     'voting': '投票中',
@@ -187,7 +189,9 @@ async function updatePhaseDisplay(phase) {
     document.getElementById('result-overlay').classList.add('hidden');
     resultShown = false;
 
-    document.body.className = `theme-${phase}`;
+    // confirm_roleの背景テーマはdiscussion（議論）と同様にする
+    const themeName = phase === 'confirm_role' ? 'discussion' : phase;
+    document.body.className = `theme-${themeName}`;
 
     // GMヒント（夜フェーズに行動待ちを表示）
     if (myRoleType === 'gm' && phase === 'night') {
@@ -300,6 +304,14 @@ async function updatePhaseDisplay(phase) {
                 document.getElementById('night-action-overlay').classList.add('hidden');
                 document.getElementById('morning-overlay').classList.add('hidden');
                 // 議論フェーズでは占い・霊媒結果は表示しない
+                document.getElementById('seer-result-area').classList.add('hidden');
+                document.getElementById('medium-result-area').classList.add('hidden');
+
+            } else if (phase === 'confirm_role') {
+                // ── 役職確認フェーズ ──
+                document.getElementById('vote-overlay').classList.add('hidden');
+                document.getElementById('night-action-overlay').classList.add('hidden');
+                document.getElementById('morning-overlay').classList.add('hidden');
                 document.getElementById('seer-result-area').classList.add('hidden');
                 document.getElementById('medium-result-area').classList.add('hidden');
 
@@ -2610,8 +2622,12 @@ async function advanceTimeline(offset) {
         let nextTimelineIndex = currentTimelineIndex;
 
         if (lastKnownPhase === 'waiting') {
-            // 朝礼(rules) -> 1限前休み(night)
+            // 朝礼(rules) -> 役職の確認
             nextTimelineIndex = 1;
+            nextPhase = 'confirm_role';
+        } else if (lastKnownPhase === 'confirm_role') {
+            // 役職の確認 -> 1限前休み(night)
+            nextTimelineIndex = 2;
             nextPhase = 'night';
         } else if (lastKnownPhase === 'night') {
             // 夜 -> 朝（タイムスケジュール上の次の枠に進み、朝フェーズを開始）
@@ -2654,10 +2670,17 @@ async function advanceTimeline(offset) {
         let prevPhase = '';
         let prevTimelineIndex = currentTimelineIndex;
 
-        if (lastKnownPhase === 'night') {
-            // 夜 -> 前の投票（タイムスケジュールを1つ戻す）
+        if (lastKnownPhase === 'confirm_role') {
+            prevTimelineIndex = 0;
+            prevPhase = 'waiting';
+        } else if (lastKnownPhase === 'night') {
+            // 夜 -> 前の投票 または 役職確認（タイムスケジュールを1つ戻す）
             prevTimelineIndex = currentTimelineIndex - 1;
-            prevPhase = 'voting';
+            if (prevTimelineIndex === 1) {
+                prevPhase = 'confirm_role';
+            } else {
+                prevPhase = 'voting';
+            }
             if (prevTimelineIndex < 0) {
                 prevTimelineIndex = 0;
                 prevPhase = 'waiting';
@@ -2754,7 +2777,11 @@ function updateGmTimelineButtons() {
     btnNext.style.cursor = '';
 
     if (lastKnownPhase === 'waiting') {
-        btnNext.textContent = 'ゲーム開始 (1限前休み 夜フェーズへ) ➔';
+        btnNext.textContent = 'ゲーム開始 (役職確認へ) ➔';
+    } else if (lastKnownPhase === 'confirm_role') {
+        const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+        const nextPeriod = nextStep ? nextStep.period : '次';
+        btnNext.textContent = `[${nextPeriod}] 夜フェーズへ (1日目夜) ➔`;
     } else if (lastKnownPhase === 'night') {
         const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
         const nextPeriod = nextStep ? nextStep.period : '次';
