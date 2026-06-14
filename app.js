@@ -1,4 +1,4 @@
-console.log("【最新版 2026/06/14 23:40】夜間UIの3カラムベース化 実装済み");
+console.log("【最新版 2026/06/15 00:30】GMキック機能＆プレイヤー強制退室ロジック 実装済み");
 
 /* =============================================
    人狼ゲーム管理 - アプリケーションロジック (app.js)
@@ -476,6 +476,20 @@ function renderPlayerList() {
                 badge.textContent = '死亡';
                 div.appendChild(badge);
             }
+
+            // GMだけが見える「❌ キック」ボタン
+            const kickBtn = document.createElement('button');
+            kickBtn.className = 'btn-kick';
+            kickBtn.textContent = '❌ キック';
+            kickBtn.style.marginLeft = '0.5rem';
+            kickBtn.style.background = '#f7768e';
+            kickBtn.style.color = '#fff';
+            kickBtn.style.border = 'none';
+            kickBtn.style.borderRadius = '6px';
+            kickBtn.style.padding = '0.2rem 0.5rem';
+            kickBtn.style.cursor = 'pointer';
+            kickBtn.onclick = () => kickPlayer(p.id, p.name);
+            div.appendChild(kickBtn);
         }
         playerList.appendChild(div);
     });
@@ -1601,6 +1615,23 @@ async function killPlayer(name) {
     }
 }
 
+// =============================================
+// キック処理（GM専用）
+// =============================================
+async function kickPlayer(id, name) {
+    if (!confirm(`本当に ${name} さんをキック（強制退室）しますか？`)) return;
+    try {
+        const { error } = await supabaseClient
+            .from('players')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+    } catch (err) {
+        console.error('キックエラー:', err);
+        alert('キック処理に失敗しました。');
+    }
+}
+
 
 // =============================================
 // 役職カスタマイズ（GM専用）
@@ -1913,9 +1944,12 @@ async function resetGame() {
 // =============================================
 // ログイン・セッション管理
 // =============================================
-function saveSession(name, roleType) {
+function saveSession(name, roleType, id = null) {
     sessionStorage.setItem('werewolf_playerName', name);
     sessionStorage.setItem('werewolf_roleType', roleType);
+    if (id) {
+        sessionStorage.setItem('werewolf_playerId', id);
+    }
 }
 
 function restoreSession() {
@@ -1933,6 +1967,7 @@ function restoreSession() {
 function clearSession() {
     sessionStorage.removeItem('werewolf_playerName');
     sessionStorage.removeItem('werewolf_roleType');
+    sessionStorage.removeItem('werewolf_playerId');
     alert('ログイン情報をリセットしました。');
     location.reload();
 }
@@ -1951,6 +1986,7 @@ async function joinGame(role) {
     event.currentTarget.textContent = role === 'gm' ? '部屋を作る...' : '部屋に入る...';
 
     try {
+        let playerId = null;
         if (role === 'gm') {
             const { error: resetError } = await supabaseClient
                 .from('players')
@@ -1977,19 +2013,23 @@ async function joinGame(role) {
             const chatLog = document.getElementById('wolf-chat-log');
             if (chatLog) chatLog.innerHTML = '';
         } else if (role === 'player') {
-            const { error } = await supabaseClient
+            const { data, error } = await supabaseClient
                 .from('players')
-                .insert([{ name: name }]);
+                .insert([{ name: name }])
+                .select();
             if (error) {
                 alert('参加に失敗しました。名前が被っているか、テーブル設定を確認してください。');
                 event.currentTarget.innerHTML = originalText;
                 btns.forEach(btn => btn.disabled = false);
                 return;
             }
+            if (data && data[0]) {
+                playerId = data[0].id;
+            }
         }
         myPlayerName = name;
         myRoleType = role;
-        saveSession(name, role);
+        saveSession(name, role, playerId);
         setupGameView();
     } catch (err) {
         console.error(err);
@@ -2164,9 +2204,20 @@ async function startGameSync() {
         // プレイヤーの退出
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'players' },
             (payload) => {
+                const myId = sessionStorage.getItem('werewolf_playerId');
+                const isMeKicked = (payload.old.id && String(payload.old.id) === String(myId)) || (payload.old.name === myPlayerName);
+
                 currentPlayers = currentPlayers.filter(p => p.name !== payload.old.name);
                 renderPlayerList();
                 renderMemoList();
+
+                if (isMeKicked && myRoleType === 'player') {
+                    sessionStorage.removeItem('werewolf_playerName');
+                    sessionStorage.removeItem('werewolf_roleType');
+                    sessionStorage.removeItem('werewolf_playerId');
+                    alert("GMによって部屋からキックされました。");
+                    location.reload();
+                }
             }
         )
         // 人狼チャットメッセージ追加のリアルタイム同期
