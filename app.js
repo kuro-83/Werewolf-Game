@@ -1,3 +1,5 @@
+console.log("【最新版 2026/06/14 22:35】シークレット投票機能 実装済み");
+
 /* =============================================
    人狼ゲーム管理 - アプリケーションロジック (app.js)
    Supabase Realtime 連携 + 勝利判定 + リザルト画面 + 投票システム
@@ -39,6 +41,7 @@ let resultShown = false; // リザルト画面の重複表示防止フラグ
 let hasVotedToday = false; // 昼の投票済フラグ
 let isCountingVotes = false; // 集計中の重複実行防止フラグ
 let voteCountdownTimer = null;  // カウントダウンタイマー ID
+let hideVoteDetails = false;   // シークレット投票フラグ（Supabase game_status.hide_vote_details と同期）
 
 // =============================================
 // タイムスケジュール（タイムライン）定義
@@ -1061,38 +1064,79 @@ async function showVoteResult(exiledName, voteLog) {
             }));
     }
 
-    if (finalVoteLog && finalVoteLog.length > 0) {
-        finalVoteLog.forEach((entry, i) => {
-            const item = document.createElement('div');
-            item.className = 'vote-log-item';
-            item.style.animationDelay = `${i * 0.07}s`;
+    if (hideVoteDetails) {
+        // ── シークレット投票モード: 票数集計のみ表示 ──
+        const tally = {};
+        if (finalVoteLog && finalVoteLog.length > 0) {
+            finalVoteLog.forEach(entry => {
+                if (entry.target) {
+                    tally[entry.target] = (tally[entry.target] || 0) + 1;
+                }
+            });
+        }
 
-            const voterSpan = document.createElement('span');
-            voterSpan.className = 'voter';
-            voterSpan.textContent = entry.voter;
+        const secretHeader = document.createElement('div');
+        secretHeader.style.cssText = 'color:rgba(255,255,255,0.4); font-size:0.8rem; text-align:center; margin-bottom:0.6rem; letter-spacing:0.05em;';
+        secretHeader.textContent = '🔒 投票内容は非公開です';
+        listEl.appendChild(secretHeader);
 
-            const arrowSpan = document.createElement('span');
-            arrowSpan.className = 'arrow';
-            arrowSpan.textContent = '➡️';
+        const sorted = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+        if (sorted.length > 0) {
+            sorted.forEach(([name, count], i) => {
+                const item = document.createElement('div');
+                item.className = 'vote-log-item';
+                item.style.animationDelay = `${i * 0.07}s`;
 
-            const targetSpan = document.createElement('span');
-            if (entry.target) {
-                targetSpan.className = 'target';
-                targetSpan.textContent = entry.target === exiledName
-                    ? `${entry.target} ★`
-                    : entry.target;
-            } else {
-                targetSpan.className = 'abstain';
-                targetSpan.textContent = '（棄権）';
-            }
+                const nameSpan = document.createElement('span');
+                nameSpan.className = name === exiledName ? 'target' : 'voter';
+                nameSpan.textContent = name === exiledName ? `${name} ★` : name;
 
-            item.appendChild(voterSpan);
-            item.appendChild(arrowSpan);
-            item.appendChild(targetSpan);
-            listEl.appendChild(item);
-        });
+                const countSpan = document.createElement('span');
+                countSpan.className = 'arrow';
+                countSpan.textContent = `… ${count}票`;
+
+                item.appendChild(nameSpan);
+                item.appendChild(countSpan);
+                listEl.appendChild(item);
+            });
+        } else {
+            listEl.innerHTML += `<div style="color:rgba(255,255,255,0.4); font-size:0.85rem; text-align:center; padding:0.5rem;">投票記録がありません</div>`;
+        }
     } else {
-        listEl.innerHTML = `<div style="color:rgba(255,255,255,0.4); font-size:0.85rem; text-align:center; padding:0.5rem;">投票記録がありません</div>`;
+        // ── 通常モード: 全ログ表示 ──
+        if (finalVoteLog && finalVoteLog.length > 0) {
+            finalVoteLog.forEach((entry, i) => {
+                const item = document.createElement('div');
+                item.className = 'vote-log-item';
+                item.style.animationDelay = `${i * 0.07}s`;
+
+                const voterSpan = document.createElement('span');
+                voterSpan.className = 'voter';
+                voterSpan.textContent = entry.voter;
+
+                const arrowSpan = document.createElement('span');
+                arrowSpan.className = 'arrow';
+                arrowSpan.textContent = '➡️';
+
+                const targetSpan = document.createElement('span');
+                if (entry.target) {
+                    targetSpan.className = 'target';
+                    targetSpan.textContent = entry.target === exiledName
+                        ? `${entry.target} ★`
+                        : entry.target;
+                } else {
+                    targetSpan.className = 'abstain';
+                    targetSpan.textContent = '（棄権）';
+                }
+
+                item.appendChild(voterSpan);
+                item.appendChild(arrowSpan);
+                item.appendChild(targetSpan);
+                listEl.appendChild(item);
+            });
+        } else {
+            listEl.innerHTML = `<div style="color:rgba(255,255,255,0.4); font-size:0.85rem; text-align:center; padding:0.5rem;">投票記録がありません</div>`;
+        }
     }
 
     // GMのみ「夜フェーズへ」ボタンを表示
@@ -1826,7 +1870,7 @@ async function resetGame() {
         // game_status を waiting に戻す
         const { error: phaseError } = await supabaseClient
             .from('game_status')
-            .update({ current_phase: 'waiting', winner: null, timeline_index: 0 })
+            .update({ current_phase: 'waiting', winner: null, timeline_index: 0, hide_vote_details: false })
             .eq('id', 1);
 
         if (phaseError) {
@@ -1965,7 +2009,7 @@ async function startGameSync() {
     try {
         const phaseRes = await supabaseClient
             .from('game_status')
-            .select('current_phase, winner, timeline_index')
+            .select('current_phase, winner, timeline_index, hide_vote_details')
             .limit(1)
             .single();
         if (phaseRes.error) throw phaseRes.error;
@@ -1988,6 +2032,12 @@ async function startGameSync() {
             ? phaseRes.data.timeline_index
             : 0;
 
+        // シークレット投票設定を同期
+        if (phaseRes.data.hide_vote_details !== undefined) {
+            hideVoteDetails = !!phaseRes.data.hide_vote_details;
+            updateHideVoteDetailsUI(hideVoteDetails);
+        }
+
         await updatePhaseDisplay(phaseRes.data.current_phase);
         renderTimeline();
         updateGmTimelineButtons();
@@ -2007,6 +2057,11 @@ async function startGameSync() {
                 }
                 if (payload.new.timeline_index !== undefined && payload.new.timeline_index !== null) {
                     currentTimelineIndex = payload.new.timeline_index;
+                }
+                // シークレット投票設定をリアルタイム同期
+                if (payload.new.hide_vote_details !== undefined) {
+                    hideVoteDetails = !!payload.new.hide_vote_details;
+                    updateHideVoteDetailsUI(hideVoteDetails);
                 }
                 await updatePhaseDisplay(payload.new.current_phase);
                 renderTimeline();
@@ -2419,6 +2474,42 @@ function escapeHTML(str) {
             '"': '&quot;'
         }[tag] || tag)
     );
+}
+
+// =============================================
+// 🔒 シークレット投票設定
+// =============================================
+
+/**
+ * シークレット投票チェックボックスのUI状態を更新する（全クライアント共通）
+ */
+function updateHideVoteDetailsUI(value) {
+    const checkbox = document.getElementById('check-hide-vote-details');
+    if (checkbox) {
+        checkbox.checked = !!value;
+    }
+}
+
+/**
+ * GMがトグルを変更したときにSupabaseへ設定を書き込む
+ */
+async function onHideVoteDetailsChange() {
+    if (myRoleType !== 'gm') return;
+    const checkbox = document.getElementById('check-hide-vote-details');
+    if (!checkbox) return;
+    const newValue = checkbox.checked;
+
+    try {
+        const { error } = await supabaseClient
+            .from('game_status')
+            .update({ hide_vote_details: newValue })
+            .eq('id', 1);
+        if (error) throw error;
+        console.log(`[VOTE] シークレット投票: ${newValue ? 'ON（詳細非公開）' : 'OFF（全公開）'}`);
+    } catch (err) {
+        console.error('シークレット投票設定の更新エラー:', err);
+        checkbox.checked = !newValue; // 失敗時はUIを元に戻す
+    }
 }
 
 // =============================================

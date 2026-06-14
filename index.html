@@ -79,6 +79,14 @@
                     <div id="total-info" class="total-info total-error">
                         現在の設定: 計 <span id="total-role-count">0</span> 人 / 参加者: <span id="total-player-count">0</span> 人
                     </div>
+                    <!-- シークレット投票設定 (GM専用) -->
+                    <div class="secret-vote-row">
+                        <span class="secret-vote-label">🔒 シークレット投票（誰が誰に入れたか隠す）</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="check-hide-vote-details" onchange="onHideVoteDetailsChange()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
                 </div>
 
                 <!-- 投票進捗カウンター（議論・投票フェーズで全員に表示） -->
