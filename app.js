@@ -1,4 +1,4 @@
-console.log("【最新版 2026/06/15 00:30】GMキック機能＆プレイヤー強制退室ロジック 実装済み");
+console.log("【最新版 2026/06/15 00:40】キックのリアルタイム同期＆エラー強制退避 修正済み");
 
 /* =============================================
    人狼ゲーム管理 - アプリケーションロジック (app.js)
@@ -420,6 +420,7 @@ async function updatePhaseDisplay(phase) {
 }
 
 async function fetchMyRole() {
+    if (myRoleType !== 'player') return;
     try {
         const { data, error } = await supabaseClient
             .from('players')
@@ -427,7 +428,17 @@ async function fetchMyRole() {
             .eq('name', myPlayerName)
             .single();
 
-        if (error) throw error;
+        if (error || !data) {
+            // データが取得できない場合はキックされたとみなして安全にログアウト
+            console.warn('[KICKED] 自分のプレイヤーデータが取得できません。強制退避します。');
+            sessionStorage.removeItem('werewolf_playerName');
+            sessionStorage.removeItem('werewolf_roleType');
+            sessionStorage.removeItem('werewolf_playerId');
+            alert("GMによって部屋からキックされました。");
+            location.reload();
+            return;
+        }
+
         if (data && data.role) {
             myRoleName = data.role;
             document.getElementById('my-role-name').textContent = myRoleName;
@@ -439,6 +450,23 @@ async function fetchMyRole() {
         updateWolfChatButtonVisibility();
     } catch (err) {
         console.error('役職取得エラー:', err);
+        // エラー発生時もDBに自分が存在するか再確認し、無ければキックとみなす
+        try {
+            const { data } = await supabaseClient
+                .from('players')
+                .select('id')
+                .eq('name', myPlayerName);
+            if (!data || data.length === 0) {
+                sessionStorage.removeItem('werewolf_playerName');
+                sessionStorage.removeItem('werewolf_roleType');
+                sessionStorage.removeItem('werewolf_playerId');
+                alert("GMによって部屋からキックされました。");
+                location.reload();
+                return;
+            }
+        } catch (checkErr) {
+            console.error('キック再確認エラー:', checkErr);
+        }
         document.getElementById('my-role-name').textContent = '取得エラー';
     }
 }
@@ -2203,13 +2231,9 @@ async function startGameSync() {
         )
         // プレイヤーの退出
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'players' },
-            (payload) => {
+            async (payload) => {
                 const myId = sessionStorage.getItem('werewolf_playerId');
                 const isMeKicked = (payload.old.id && String(payload.old.id) === String(myId)) || (payload.old.name === myPlayerName);
-
-                currentPlayers = currentPlayers.filter(p => p.name !== payload.old.name);
-                renderPlayerList();
-                renderMemoList();
 
                 if (isMeKicked && myRoleType === 'player') {
                     sessionStorage.removeItem('werewolf_playerName');
@@ -2217,7 +2241,25 @@ async function startGameSync() {
                     sessionStorage.removeItem('werewolf_playerId');
                     alert("GMによって部屋からキックされました。");
                     location.reload();
+                    return; // 完全に処理をストップ
                 }
+
+                // リアルタイムに最新のプレイヤー一覧をDBから再取得
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('players')
+                        .select('id, name, is_alive, role, vote_target_id, night_target_id');
+                    if (!error && data) {
+                        currentPlayers = data;
+                    } else {
+                        currentPlayers = currentPlayers.filter(p => p.name !== payload.old.name);
+                    }
+                } catch (err) {
+                    currentPlayers = currentPlayers.filter(p => p.name !== payload.old.name);
+                }
+
+                renderPlayerList();
+                renderMemoList();
             }
         )
         // 人狼チャットメッセージ追加のリアルタイム同期
