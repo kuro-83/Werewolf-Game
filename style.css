@@ -1921,12 +1921,12 @@ body.theme-result-teruteru {
 }
 
 /* チェック時：ON状態 */
-.toggle-switch input:checked + .toggle-slider {
+.toggle-switch input:checked+.toggle-slider {
     background: rgba(255, 158, 100, 0.35);
     border-color: rgba(255, 158, 100, 0.55);
 }
 
-.toggle-switch input:checked + .toggle-slider::before {
+.toggle-switch input:checked+.toggle-slider::before {
     transform: translateX(22px);
     background: #ff9e64;
     box-shadow: 0 0 8px rgba(255, 158, 100, 0.5);
