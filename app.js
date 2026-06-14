@@ -1793,6 +1793,14 @@ async function resetGame() {
 
     if (voteCountdownTimer) { clearInterval(voteCountdownTimer); voteCountdownTimer = null; }
 
+    console.log("【修正 2026/06/14】resetGameのリザルトクリア処理を実行しました");
+
+    // リザルト画面・関連フラグを即座にクリア（Realtimeイベント到着前の残留防止）
+    document.getElementById('result-overlay').classList.add('hidden');
+    document.getElementById('vote-result-overlay').classList.add('hidden');
+    resultShown = false;
+    _pendingWinner = null;
+
     try {
         // 全プレイヤーの role・is_alive・vote_target_id をリセット
         const { error: resetError } = await supabaseClient
