@@ -1,4 +1,4 @@
-console.log("【最新版 2026/06/15 00:40】キックのリアルタイム同期＆エラー強制退避 修正済み");
+console.log("【最新版 2026/06/15 23:00】結果画面の役職ガード＆夜リロード対策 実装済み");
 
 /* =============================================
    人狼ゲーム管理 - アプリケーションロジック (app.js)
@@ -319,13 +319,39 @@ async function updatePhaseDisplay(phase) {
                 // ── 夜フェーズ ──
                 // 「投票日のフラグ」を全クライアントでリセット（2回目以降の投票対策）
                 hasVotedToday = false;
-                // 夜の行動済フラグをリセット（占い師・霊媒師が2ターン目以降も操作できるようにする）
-                hasActedTonight = false;
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('vote-result-overlay').classList.add('hidden');
                 // 占い結果エリアを隠す（夜フェーズ開始時）
                 document.getElementById('seer-result-area').classList.add('hidden');
                 document.getElementById('medium-result-area').classList.add('hidden');
+
+                // ── リロード対策: Supabase の night_target_id を確認して行動済フラグを復元 ──
+                // フェーズ変更（新しい夜）の場合のみリセット、リロードの場合はDBから状態を復元する
+                const NIGHT_ACTION_ROLES_RELOAD = ['人狼', '預言者', '霊媒師', '騎士'];
+                if (isMeAlive && NIGHT_ACTION_ROLES_RELOAD.includes(myRoleName)) {
+                    try {
+                        const { data: myData } = await supabaseClient
+                            .from('players')
+                            .select('night_target_id')
+                            .eq('name', myPlayerName)
+                            .single();
+                        if (myData && myData.night_target_id) {
+                            // DBにnight_target_idが存在する → 今夜すでに行動済み
+                            hasActedTonight = true;
+                            console.log('[NIGHT] リロード検出: night_target_id あり → hasActedTonight = true');
+                        } else {
+                            // DBにnight_target_idがない → まだ未行動
+                            hasActedTonight = false;
+                            console.log('[NIGHT] フェーズ開始 or リセット済み: hasActedTonight = false');
+                        }
+                    } catch (e) {
+                        console.warn('[NIGHT] night_target_id の確認に失敗:', e);
+                        hasActedTonight = false;
+                    }
+                } else {
+                    // 夜行動役職でない場合はリセット不要（待機のまま）
+                    hasActedTonight = false;
+                }
 
                 if (isMeAlive) {
                     document.getElementById('night-action-overlay').classList.remove('hidden');
@@ -816,7 +842,8 @@ async function renderResultPlayerList() {
 
         players.forEach((p, i) => {
             const item = document.createElement('div');
-            const isWolf = p.role === '人狼';
+            // hideVoteDetails=ON の場合、役職でのスタイリングも行わない（人狼判定も隠す）
+            const isWolf = !hideVoteDetails && p.role === '人狼';
             item.className = `result-player-item${isWolf ? ' is-wolf' : ''}`;
             item.style.animationDelay = `${i * 0.08}s`;
 
@@ -831,13 +858,16 @@ async function renderResultPlayerList() {
                 nameDiv.appendChild(deadMark);
             }
 
-            const roleBadge = document.createElement('span');
-            const badgeClass = ROLE_BADGE_CLASS[p.role] || 'role-badge-unknown';
-            roleBadge.className = `result-role-badge ${badgeClass}`;
-            roleBadge.textContent = p.role || '役職なし';
+            // hideVoteDetails=ON の場合、役職バッジを表示しない（役職漏洩防止）
+            if (!hideVoteDetails) {
+                const roleBadge = document.createElement('span');
+                const badgeClass = ROLE_BADGE_CLASS[p.role] || 'role-badge-unknown';
+                roleBadge.className = `result-role-badge ${badgeClass}`;
+                roleBadge.textContent = p.role || '役職なし';
+                item.appendChild(roleBadge);
+            }
 
             item.appendChild(nameDiv);
-            item.appendChild(roleBadge);
             listEl.appendChild(item);
         });
 
