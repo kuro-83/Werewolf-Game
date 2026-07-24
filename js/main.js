@@ -2,7 +2,7 @@
 // js/main.js
 // エントリーポイント：Supabase Realtime購読 & window公開
 // =============================================
-console.log("【最新版 2026/07/24】幽霊観戦モード（神視点UI） 実装済み");
+console.log("【最新版 2026/07/24】幽霊観戦モード表示不具合・リアルタイム連携修正済み");
 
 import { supabaseClient } from './config.js';
 import {
@@ -129,6 +129,16 @@ async function startGameSync() {
         renderPlayerList();
         renderMemoList();
 
+        // ── リロード時の幽霊状態復元 ──
+        // 初期データ取得後、自分が死亡状態の場合は幽霊UIを有効化する
+        if (getMyRoleType() === 'player') {
+            const myPlayerOnLoad = (playersRes.data || []).find(p => p.name === getMyPlayerName());
+            if (myPlayerOnLoad && !myPlayerOnLoad.is_alive) {
+                console.log('👻 [リロード復元] 死亡状態を検出 → 幽霊モードを有効化:', myPlayerOnLoad);
+                checkMyAliveStatus();
+            }
+        }
+
         if (phaseRes.data.winner) {
             setPendingWinner(phaseRes.data.winner);
         }
@@ -216,7 +226,13 @@ async function startGameSync() {
 
                 // 自分が死亡した場合は霊界モードをチェック
                 if (getMyRoleType() === 'player' && payload.new.name === getMyPlayerName()) {
+                    console.log('👻 [Realtime] 自プレイヤー更新検知 is_alive=', payload.new.is_alive, payload.new);
                     checkMyAliveStatus();
+                    // is_alive が false になった瞬間を明示的に検知して幽霊モードを強制有効化
+                    if (!payload.new.is_alive) {
+                        console.log('👻 [Realtime] 死亡確定 → enableGhostSpectatorMode() 強制実行');
+                        enableGhostSpectatorMode();
+                    }
                 }
 
                 // 死亡時の処理（勝利判定および投票結果の同期表示）

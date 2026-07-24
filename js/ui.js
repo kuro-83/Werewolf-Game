@@ -83,6 +83,8 @@ export async function updatePhaseDisplay(phase) {
         document.getElementById('vote-progress-area').classList.add('hidden');
         document.getElementById('vote-result-overlay').classList.add('hidden');
         document.getElementById('medium-result-area').classList.add('hidden');
+        // waitingフェーズでは幽霊モードUIも消す
+        disableGhostSpectatorMode();
         setHasActedTonight(false);
         setHasVotedToday(false);
         setIsCountingVotes(false);
@@ -372,10 +374,12 @@ export async function fetchMyRole() {
 // =============================================
 export function checkMyAliveStatus() {
     const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    console.log('👻 [checkMyAliveStatus] me=', me?.name, 'is_alive=', me?.is_alive);
     if (me && !me.is_alive) {
         document.getElementById('ghost-mode-overlay').classList.remove('hidden');
         document.getElementById('night-action-overlay').classList.add('hidden');
         // 幽霊観戦モード：神視点UIを有効化
+        console.log('👻 幽霊モード有効化:', me);
         enableGhostSpectatorMode();
     } else {
         document.getElementById('ghost-mode-overlay').classList.add('hidden');
@@ -388,8 +392,14 @@ export function checkMyAliveStatus() {
  * 幽霊観戦モードをONにする（神視点バナー＋各パネルを表示）
  */
 export function enableGhostSpectatorMode() {
+    console.log('👻 [enableGhostSpectatorMode] 実行開始');
     const banner = document.getElementById('ghost-spectator-banner');
-    if (banner) banner.classList.remove('hidden');
+    if (banner) {
+        banner.classList.remove('hidden');
+        // hiddenクラスだけでは不十分な場合のため、displayを明示指定で強制表示
+        banner.style.display = 'block';
+        banner.style.zIndex = '9999';
+    }
     // 神視点：全員の役職一覧を表示
     renderGhostRoleList();
     // 夜フェーズ中なら夜行動パネルも表示
@@ -399,6 +409,7 @@ export function enableGhostSpectatorMode() {
         const panel = document.getElementById('ghost-spectator-panel');
         if (panel) panel.classList.add('hidden');
     }
+    console.log('👻 [enableGhostSpectatorMode] 完了');
 }
 
 /**
@@ -406,7 +417,10 @@ export function enableGhostSpectatorMode() {
  */
 export function disableGhostSpectatorMode() {
     const banner = document.getElementById('ghost-spectator-banner');
-    if (banner) banner.classList.add('hidden');
+    if (banner) {
+        banner.classList.add('hidden');
+        banner.style.display = '';
+    }
     const panel = document.getElementById('ghost-spectator-panel');
     if (panel) panel.classList.add('hidden');
     const rolePanel = document.getElementById('ghost-role-list-panel');
@@ -429,6 +443,8 @@ export function renderGhostRoleList() {
     }
 
     panel.classList.remove('hidden');
+    // z-indexを明示指定で強制前面表示
+    panel.style.zIndex = '9990';
     listEl.innerHTML = '';
 
     const players = getCurrentPlayers();
@@ -480,6 +496,8 @@ export function renderGhostNightActions() {
     }
 
     panel.classList.remove('hidden');
+    // z-indexを明示指定で強制前面表示
+    panel.style.zIndex = '9990';
     listEl.innerHTML = '';
 
     const NIGHT_ACTION_ROLES = ['人狼', '預言者', '霊媒師', '騎士'];
