@@ -1,0 +1,1466 @@
+// =============================================
+// js/ui.js
+// 画面描画・UIアップデート系の関数群
+// =============================================
+
+import { supabaseClient } from './config.js';
+import { GAME_TIMELINE, phaseNames, ROLES_INFO, ROLE_BADGE_CLASS } from './config.js';
+import {
+    getMyPlayerName, getMyRoleType, getMyRoleName, setMyRoleName,
+    getCurrentPlayers, setCurrentPlayers, setCurrentPlayersCount,
+    getLastKnownPhase, setLastKnownPhase,
+    getHasActedTonight, setHasActedTonight,
+    getResultShown, setResultShown,
+    getHasVotedToday, setHasVotedToday,
+    getIsCountingVotes, setIsCountingVotes,
+    getVoteCountdownTimer, setVoteCountdownTimer,
+    getHideVoteDetails,
+    getCurrentTimelineIndex,
+    getPendingWinner,
+    playerListArea, myRoleArea, roleSettingsArea, gmHint, playerList, phaseElement
+} from './state.js';
+
+// 循環依存を避けるため、action.jsの関数はimport onDemandではなく引数/コールバックで受け取る
+// ただし実際は同一モジュールバンドルではないため、window経由で呼ぶ設計にする
+
+// =============================================
+// フェーズ表示・メインUI更新
+// =============================================
+export async function updatePhaseDisplay(phase) {
+    // フェーズ変更時にスマホ用メモドロワーが開いていたら閉じる
+    const sidebar = document.getElementById('left-sidebar');
+    if (sidebar && sidebar.classList.contains('show-mobile')) {
+        toggleMobileMemo();
+    }
+
+    setLastKnownPhase(phase);
+    const displayName = phaseNames[phase] || phase;
+
+    // フェーズ変更時に役職カバーをリセット（覗き見防止）
+    resetRoleCover();
+
+    if (phaseElement.textContent !== displayName) {
+        phaseElement.textContent = displayName;
+        phaseElement.classList.remove('update-anim');
+        void phaseElement.offsetWidth;
+        phaseElement.classList.add('update-anim');
+    }
+
+    // リザルトフェーズの処理（最優先）
+    if (phase === 'result') {
+        await showResultScreen();
+        return;
+    }
+
+    // リザルト以外のフェーズに戻ったらリザルト画面を閉じる
+    document.getElementById('result-overlay').classList.add('hidden');
+    setResultShown(false);
+
+    // confirm_roleの背景テーマはdiscussion（議論）と同様にする
+    const themeName = phase === 'confirm_role' ? 'discussion' : phase;
+    document.body.className = `theme-${themeName}`;
+
+    // GMヒント（夜フェーズに行動待ちを表示）
+    if (getMyRoleType() === 'gm' && phase === 'night') {
+        gmHint.classList.remove('hidden');
+    } else {
+        gmHint.classList.add('hidden');
+    }
+
+    // GM用夜フェーズ行動状況インジケーターを更新
+    renderNightActionStatus();
+
+    if (phase === 'waiting') {
+        const chatLog = document.getElementById('wolf-chat-log');
+        if (chatLog) chatLog.innerHTML = '';
+
+        playerListArea.classList.remove('hidden');
+        myRoleArea.classList.add('hidden');
+        document.getElementById('ghost-mode-overlay').classList.add('hidden');
+        document.getElementById('night-action-overlay').classList.add('hidden');
+        document.getElementById('morning-overlay').classList.add('hidden');
+        document.getElementById('vote-overlay').classList.add('hidden');
+        document.getElementById('vote-progress-area').classList.add('hidden');
+        document.getElementById('vote-result-overlay').classList.add('hidden');
+        document.getElementById('medium-result-area').classList.add('hidden');
+        setHasActedTonight(false);
+        setHasVotedToday(false);
+        setIsCountingVotes(false);
+        if (getVoteCountdownTimer()) { clearInterval(getVoteCountdownTimer()); setVoteCountdownTimer(null); }
+
+        if (getMyRoleType() === 'gm') {
+            roleSettingsArea.classList.remove('hidden');
+            document.getElementById('vote-close-area').classList.add('hidden');
+        }
+
+    } else {
+        roleSettingsArea.classList.add('hidden');
+
+        // ── 夕フェーズ: 投票進捗バーはGM・プレイヤー共通で表示（投票フェーズのみ） ──
+        if (phase === 'voting') {
+            document.getElementById('vote-progress-area').classList.remove('hidden');
+            const pArea = document.getElementById('vote-progress-area-player');
+            if (pArea) pArea.classList.remove('hidden');
+            updateVoteProgress();
+        } else {
+            document.getElementById('vote-progress-area').classList.add('hidden');
+            const pArea = document.getElementById('vote-progress-area-player');
+            if (pArea) pArea.classList.add('hidden');
+        }
+
+        if (getMyRoleType() === 'gm') {
+            playerListArea.classList.remove('hidden');
+            // 投票フェーズのみ「投票を締め切る」ボタンを表示
+            if (phase === 'voting') {
+                document.getElementById('vote-close-area').classList.remove('hidden');
+            } else {
+                document.getElementById('vote-close-area').classList.add('hidden');
+            }
+        } else {
+            playerListArea.classList.add('hidden');
+            document.getElementById('vote-close-area').classList.add('hidden');
+        }
+
+        if (getMyRoleType() === 'player') {
+            myRoleArea.classList.remove('hidden');
+            await fetchMyRole();
+            checkMyAliveStatus();
+
+            const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+            const isMeAlive = me ? me.is_alive : false;
+
+            if (phase === 'voting') {
+                // ── 投票フェーズ ──
+                document.getElementById('night-action-overlay').classList.add('hidden');
+                document.getElementById('morning-overlay').classList.add('hidden');
+                if (isMeAlive) {
+                    renderVoteUI();
+                } else {
+                    // 死者は霊界観戦パネル
+                    document.getElementById('vote-overlay').classList.remove('hidden');
+                    document.getElementById('vote-select').classList.add('hidden');
+                    document.getElementById('vote-done').classList.add('hidden');
+                    document.getElementById('vote-ghost').classList.remove('hidden');
+                }
+
+            } else if (phase === 'morning') {
+                // ── 朝フェーズ ──
+                document.getElementById('vote-overlay').classList.add('hidden');
+                document.getElementById('night-action-overlay').classList.add('hidden');
+                document.getElementById('morning-overlay').classList.remove('hidden');
+
+                // 昨晩の犠牲者の表示
+                showMorningVictims();
+
+                // 占い師の場合、占い結果を表示
+                if (getMyRoleName() === '預言者') {
+                    await showSeerResult();
+                } else {
+                    document.getElementById('seer-result-area').classList.add('hidden');
+                }
+                // 霊媒師の場合、霊媒結果を表示
+                if (getMyRoleName() === '霊媒師') {
+                    await showMediumResult();
+                } else {
+                    document.getElementById('medium-result-area').classList.add('hidden');
+                }
+
+            } else if (phase === 'discussion') {
+                // ── 議論フェーズ（明るい昼）──
+                document.getElementById('vote-overlay').classList.add('hidden');
+                document.getElementById('night-action-overlay').classList.add('hidden');
+                document.getElementById('morning-overlay').classList.add('hidden');
+                // 議論フェーズでは占い・霊媒結果は表示しない
+                document.getElementById('seer-result-area').classList.add('hidden');
+                document.getElementById('medium-result-area').classList.add('hidden');
+
+            } else if (phase === 'confirm_role') {
+                // ── 役職確認フェーズ ──
+                document.getElementById('vote-overlay').classList.add('hidden');
+                document.getElementById('night-action-overlay').classList.add('hidden');
+                document.getElementById('morning-overlay').classList.add('hidden');
+                document.getElementById('seer-result-area').classList.add('hidden');
+                document.getElementById('medium-result-area').classList.add('hidden');
+
+            } else if (phase === 'night') {
+                // ── 夜フェーズ ──
+                // 「投票日のフラグ」を全クライアントでリセット（2回目以降の投票対策）
+                setHasVotedToday(false);
+                document.getElementById('vote-overlay').classList.add('hidden');
+                document.getElementById('vote-result-overlay').classList.add('hidden');
+                // 占い結果エリアを隠す（夜フェーズ開始時）
+                document.getElementById('seer-result-area').classList.add('hidden');
+                document.getElementById('medium-result-area').classList.add('hidden');
+
+                // ── リロード対策: Supabase の night_target_id を確認して行動済フラグを復元 ──
+                // フェーズ変更（新しい夜）の場合のみリセット、リロードの場合はDBから状態を復元する
+                const NIGHT_ACTION_ROLES_RELOAD = ['人狼', '預言者', '霊媒師', '騎士'];
+                if (isMeAlive && NIGHT_ACTION_ROLES_RELOAD.includes(getMyRoleName())) {
+                    try {
+                        const { data: myData } = await supabaseClient
+                            .from('players')
+                            .select('night_target_id')
+                            .eq('name', getMyPlayerName())
+                            .single();
+                        if (myData && myData.night_target_id) {
+                            // DBにnight_target_idが存在する → 今夜すでに行動済み
+                            setHasActedTonight(true);
+                            console.log('[NIGHT] リロード検出: night_target_id あり → hasActedTonight = true');
+                        } else {
+                            // DBにnight_target_idがない → まだ未行動
+                            setHasActedTonight(false);
+                            console.log('[NIGHT] フェーズ開始 or リセット済み: hasActedTonight = false');
+                        }
+                    } catch (e) {
+                        console.warn('[NIGHT] night_target_id の確認に失敗:', e);
+                        setHasActedTonight(false);
+                    }
+                } else {
+                    // 夜行動役職でない場合はリセット不要（待機のまま）
+                    setHasActedTonight(false);
+                }
+
+                if (isMeAlive) {
+                    document.getElementById('night-action-overlay').classList.remove('hidden');
+
+                    if (getMyRoleName() === '人狼' && !getHasActedTonight()) {
+                        document.getElementById('night-wolf').classList.remove('hidden');
+                        document.getElementById('night-seer').classList.add('hidden');
+                        document.getElementById('night-medium').classList.add('hidden');
+                        document.getElementById('night-knight').classList.add('hidden');
+                        document.getElementById('night-waiting').classList.add('hidden');
+                        window.renderWolfTargets();
+                    } else if (getMyRoleName() === '預言者' && !getHasActedTonight()) {
+                        // ── 占い師の夜アクション ──
+                        document.getElementById('night-wolf').classList.add('hidden');
+                        document.getElementById('night-medium').classList.add('hidden');
+                        document.getElementById('night-knight').classList.add('hidden');
+                        document.getElementById('night-waiting').classList.add('hidden');
+                        document.getElementById('night-seer').classList.remove('hidden');
+                        window.renderSeerTargets();
+                    } else if (getMyRoleName() === '霊媒師' && !getHasActedTonight()) {
+                        // ── 霊媒師の夜アクション ──
+                        document.getElementById('night-wolf').classList.add('hidden');
+                        document.getElementById('night-seer').classList.add('hidden');
+                        document.getElementById('night-knight').classList.add('hidden');
+                        document.getElementById('night-waiting').classList.add('hidden');
+                        document.getElementById('night-medium').classList.remove('hidden');
+                        window.renderMediumTargets();
+                    } else if (getMyRoleName() === '騎士' && !getHasActedTonight()) {
+                        // ── 騎士の夜アクション ──
+                        document.getElementById('night-wolf').classList.add('hidden');
+                        document.getElementById('night-seer').classList.add('hidden');
+                        document.getElementById('night-medium').classList.add('hidden');
+                        document.getElementById('night-waiting').classList.add('hidden');
+                        document.getElementById('night-knight').classList.remove('hidden');
+                        window.renderKnightTargets();
+                    } else {
+                        document.getElementById('night-wolf').classList.add('hidden');
+                        document.getElementById('night-seer').classList.add('hidden');
+                        document.getElementById('night-medium').classList.add('hidden');
+                        document.getElementById('night-knight').classList.add('hidden');
+                        document.getElementById('night-waiting').classList.remove('hidden');
+                        if (getHasActedTonight()) {
+                            if (getMyRoleName() === '人狼') {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>襲撃完了</h2><p style="color:#c0caf5;">今夜の任務を終えました。<br>静かに朝を待ちましょう…</p>
+                                `;
+                            } else if (getMyRoleName() === '預言者') {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>🔮 占い完了</h2><p style="color:#c0caf5;">占い完了。朝を待っています...</p>
+                                `;
+                            } else if (getMyRoleName() === '霊媒師') {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>🔮 霊媒完了</h2><p style="color:#c0caf5;">霊媒完了。朝を待っています...</p>
+                                `;
+                            } else if (getMyRoleName() === '騎士') {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>🛡️ 守護完了</h2><p style="color:#c0caf5;">守護完了。朝を待っています...</p>
+                                `;
+                            } else {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>夜が訪れました</h2><p style="color:#c0caf5;">人狼が暗躍しています。<br>静かに朝を待ちましょう…</p>
+                                `;
+                            }
+                        } else {
+                            if (getMyRoleName() === 'てるてる') {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>夜が訪れました</h2>
+                                    <p style="color:#c0caf5;">あなたは <span style="color:#ffc777; font-weight:bold;">てるてる</span> です。夜のアクションはありません。<br>昼の投票で追放されるよう、静かに朝を待ちましょう…</p>
+                                `;
+                            } else {
+                                document.getElementById('night-waiting').innerHTML = `
+                                    <h2>夜が訪れました</h2><p style="color:#c0caf5;">人狼が暗躍しています。<br>静かに朝を待ちましょう…</p>
+                                `;
+                            }
+                        }
+                    }
+                } else {
+                    document.getElementById('night-action-overlay').classList.add('hidden');
+                }
+
+            } else {
+                // その他のフェーズ
+                document.getElementById('vote-overlay').classList.add('hidden');
+                document.getElementById('night-action-overlay').classList.add('hidden');
+                document.getElementById('morning-overlay').classList.add('hidden');
+                document.getElementById('seer-result-area').classList.add('hidden');
+                document.getElementById('medium-result-area').classList.add('hidden');
+                setHasActedTonight(false);
+            }
+        }
+    }
+}
+
+// =============================================
+// 役職取得
+// =============================================
+export async function fetchMyRole() {
+    if (getMyRoleType() !== 'player') return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('players')
+            .select('role')
+            .eq('name', getMyPlayerName())
+            .single();
+
+        if (error || !data) {
+            // データが取得できない場合はキックされたとみなして安全にログアウト
+            console.warn('[KICKED] 自分のプレイヤーデータが取得できません。強制退避します。');
+            sessionStorage.removeItem('werewolf_playerName');
+            sessionStorage.removeItem('werewolf_roleType');
+            sessionStorage.removeItem('werewolf_playerId');
+            alert("GMによって部屋からキックされました。");
+            location.reload();
+            return;
+        }
+
+        if (data && data.role) {
+            setMyRoleName(data.role);
+            document.getElementById('my-role-name').textContent = getMyRoleName();
+        } else {
+            setMyRoleName('役職なし');
+            document.getElementById('my-role-name').textContent = getMyRoleName();
+        }
+        // 人狼チャットボタンの表示制御
+        updateWolfChatButtonVisibility();
+    } catch (err) {
+        console.error('役職取得エラー:', err);
+        // エラー発生時もDBに自分が存在するか再確認し、無ければキックとみなす
+        try {
+            const { data } = await supabaseClient
+                .from('players')
+                .select('id')
+                .eq('name', getMyPlayerName());
+            if (!data || data.length === 0) {
+                sessionStorage.removeItem('werewolf_playerName');
+                sessionStorage.removeItem('werewolf_roleType');
+                sessionStorage.removeItem('werewolf_playerId');
+                alert("GMによって部屋からキックされました。");
+                location.reload();
+                return;
+            }
+        } catch (checkErr) {
+            console.error('キック再確認エラー:', checkErr);
+        }
+        document.getElementById('my-role-name').textContent = '取得エラー';
+    }
+}
+
+// =============================================
+// 生存状態チェック
+// =============================================
+export function checkMyAliveStatus() {
+    const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    if (me && !me.is_alive) {
+        document.getElementById('ghost-mode-overlay').classList.remove('hidden');
+        document.getElementById('night-action-overlay').classList.add('hidden');
+    } else {
+        document.getElementById('ghost-mode-overlay').classList.add('hidden');
+    }
+}
+
+// =============================================
+// プレイヤーリスト描画
+// =============================================
+export function renderPlayerList() {
+    playerList.innerHTML = '';
+    getCurrentPlayers().forEach(p => {
+        const div = document.createElement('div');
+        div.className = `player-item ${p.is_alive ? '' : 'dead'}`;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = p.name;
+        div.appendChild(nameSpan);
+
+        if (getMyRoleType() === 'gm') {
+            if (p.is_alive) {
+                const btn = document.createElement('button');
+                btn.className = 'btn-kill';
+                btn.textContent = '追放';
+                btn.onclick = () => window.killPlayer(p.name);
+                div.appendChild(btn);
+            } else {
+                const badge = document.createElement('span');
+                badge.className = 'badge-dead';
+                badge.textContent = '死亡';
+                div.appendChild(badge);
+            }
+
+            // GMだけが見える「❌ キック」ボタン
+            const kickBtn = document.createElement('button');
+            kickBtn.className = 'btn-kick';
+            kickBtn.textContent = '❌ キック';
+            kickBtn.style.marginLeft = '0.5rem';
+            kickBtn.style.background = '#f7768e';
+            kickBtn.style.color = '#fff';
+            kickBtn.style.border = 'none';
+            kickBtn.style.borderRadius = '6px';
+            kickBtn.style.padding = '0.2rem 0.5rem';
+            kickBtn.style.cursor = 'pointer';
+            kickBtn.onclick = () => window.kickPlayer(p.id, p.name);
+            div.appendChild(kickBtn);
+        }
+        playerList.appendChild(div);
+    });
+
+    setCurrentPlayersCount(getCurrentPlayers().length);
+    updateTotalInfo();
+}
+
+// =============================================
+// 考察メモ描画
+// =============================================
+export function renderMemoList() {
+    const memoPlayerList = document.getElementById('memo-player-list');
+    if (!memoPlayerList) return;
+
+    // ログイン中の自分のプレイヤー情報を探索してIDを取得
+    const myPlayer = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    const myPlayerId = myPlayer ? myPlayer.id : null;
+
+    // 自分自身の情報が取得できるまで待機（初期ロード対策）
+    if (!myPlayerId) {
+        memoPlayerList.innerHTML = '<div style="color:rgba(255,255,255,0.4); text-align:center; padding:1rem; font-size:0.85rem;">プレイヤー情報取得中...</div>';
+        return;
+    }
+
+    // すでに「情報取得中」等のテキストがある場合はクリア
+    if (memoPlayerList.children.length === 1 && memoPlayerList.firstElementChild.id === '') {
+        memoPlayerList.innerHTML = '';
+    }
+
+    const aliveIds = new Set(getCurrentPlayers().map(p => p.id));
+
+    // 1. 存在しなくなったプレイヤーのメモ要素を削除
+    const existingItems = memoPlayerList.querySelectorAll('.memo-item');
+    existingItems.forEach(item => {
+        const id = item.dataset.playerId;
+        if (!aliveIds.has(id)) {
+            item.remove();
+        }
+    });
+
+    // 2. プレイヤーごとに要素を作成または更新
+    getCurrentPlayers().forEach(p => {
+        const targetPlayerId = p.id;
+        const key = `werewolf_memo_1_${myPlayerId}_${targetPlayerId}`;
+
+        let itemEl = document.getElementById(`memo-item-${targetPlayerId}`);
+
+        if (!itemEl) {
+            // 新規作成
+            itemEl = document.createElement('div');
+            itemEl.id = `memo-item-${targetPlayerId}`;
+            itemEl.dataset.playerId = targetPlayerId;
+            itemEl.className = 'memo-item';
+
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'memo-player-name';
+            nameDiv.textContent = p.name;
+            itemEl.appendChild(nameDiv);
+
+            const textarea = document.createElement('textarea');
+            textarea.className = 'memo-textarea';
+            textarea.placeholder = `${p.name} さんの考察メモ...`;
+            textarea.value = localStorage.getItem(key) || '';
+
+            // 入力時に自動保存
+            textarea.addEventListener('input', (e) => {
+                localStorage.setItem(key, e.target.value);
+            });
+
+            itemEl.appendChild(textarea);
+
+            // 新規作成時のみDOMの末尾に追加する（順序移動によるフォーカス外れを防ぐ）
+            memoPlayerList.appendChild(itemEl);
+
+            // 生死状態のクラスを初期設定
+            if (p.is_alive) {
+                itemEl.classList.remove('dead');
+            } else {
+                itemEl.classList.add('dead');
+            }
+        } else {
+            // 既存更新
+            // この要素内の textarea が現在フォーカス（入力中）されている場合は、一切の更新をスルーする
+            const textarea = itemEl.querySelector('.memo-textarea');
+            if (textarea && document.activeElement === textarea) {
+                // 入力中は安全のため完全にスキップ
+                return;
+            }
+
+            // フォーカスされていない場合のみ更新を行う
+            const nameDiv = itemEl.querySelector('.memo-player-name');
+            if (nameDiv && nameDiv.textContent !== p.name) {
+                nameDiv.textContent = p.name;
+            }
+
+            // 生死状態のクラスを更新
+            if (p.is_alive) {
+                itemEl.classList.remove('dead');
+            } else {
+                itemEl.classList.add('dead');
+            }
+        }
+    });
+}
+
+// =============================================
+// スマホ用メモドロワー
+// =============================================
+export function toggleMobileMemo() {
+    const sidebar = document.getElementById('left-sidebar');
+    if (!sidebar) return;
+
+    const isShowing = sidebar.classList.toggle('show-mobile');
+
+    // 背面の暗幕オーバーレイの制御
+    let overlay = document.getElementById('memo-mobile-overlay');
+    if (isShowing) {
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'memo-mobile-overlay';
+            overlay.className = 'memo-mobile-overlay';
+            overlay.onclick = () => toggleMobileMemo(); // 暗幕タップで閉じる
+            document.body.appendChild(overlay);
+        }
+        overlay.classList.remove('hidden');
+        overlay.style.opacity = '0';
+        void overlay.offsetWidth; // リフローを強制してトランジションを効かせる
+        overlay.style.opacity = '1';
+    } else {
+        if (overlay) {
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                // アニメーション完了時にまだ閉じられている場合のみ隠す
+                if (!sidebar.classList.contains('show-mobile') && overlay) {
+                    overlay.classList.add('hidden');
+                }
+            }, 300);
+        }
+    }
+}
+
+// =============================================
+// リザルト画面
+// =============================================
+export async function showResultScreen() {
+    if (getVoteCountdownTimer()) { clearInterval(getVoteCountdownTimer()); setVoteCountdownTimer(null); }
+
+    // 最優先：GM画面などで投票結果オーバーレイが被さったままになるバグを防ぐため、強制的に非表示にする
+    document.getElementById('vote-result-overlay').classList.add('hidden');
+
+    if (getResultShown()) return;
+    setResultShown(true);
+
+    const overlay = document.getElementById('result-overlay');
+    overlay.classList.remove('hidden');
+
+    let winner = getPendingWinner();
+    if (!winner) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('game_status')
+                .select('winner')
+                .eq('id', 1)
+                .single();
+            if (!error && data && data.winner) {
+                winner = data.winner;
+            }
+        } catch (e) {
+            console.warn('winner フィールドの取得に失敗:', e);
+        }
+    }
+
+    if (!winner) {
+        const aliveWolves = getCurrentPlayers().filter(p => p.is_alive && p.role === '人狼');
+        winner = aliveWolves.length === 0 ? 'citizen' : 'wolf';
+    }
+
+    const isCitizen = winner === 'citizen';
+    const isWolf = winner === 'wolf';
+    const isTeruteru = winner === 'teruteru' || winner === 'てるてる';
+
+    if (isTeruteru) {
+        document.body.className = 'theme-result-teruteru';
+        overlay.classList.add('teruteru-win');
+        overlay.classList.remove('citizen-win', 'wolf-win');
+    } else if (isCitizen) {
+        document.body.className = 'theme-result-citizen';
+        overlay.classList.add('citizen-win');
+        overlay.classList.remove('wolf-win', 'teruteru-win');
+    } else {
+        document.body.className = 'theme-result-wolf';
+        overlay.classList.add('wolf-win');
+        overlay.classList.remove('citizen-win', 'teruteru-win');
+    }
+
+    if (isTeruteru) {
+        document.getElementById('result-icon').textContent = '🎈';
+    } else {
+        document.getElementById('result-icon').textContent = isCitizen ? '☀️' : '🐺';
+    }
+
+    const titleEl = document.getElementById('result-title');
+    if (isTeruteru) {
+        titleEl.className = 'result-title teruteru';
+        titleEl.textContent = 'てるてるの単独勝利！';
+    } else {
+        titleEl.className = `result-title ${isCitizen ? 'citizen' : 'wolf'}`;
+        titleEl.textContent = isCitizen ? '市民チームの勝利！' : '人狼チームの勝利！';
+    }
+
+    if (isTeruteru) {
+        document.getElementById('result-subtitle').textContent = '見事に追放（処刑）されました！';
+    } else {
+        document.getElementById('result-subtitle').textContent = isCitizen
+            ? '平和が訪れた！'
+            : '村は滅び去った…';
+    }
+
+    await renderResultPlayerList();
+
+    const btnReturn = document.getElementById('btn-return-lobby');
+    if (getMyRoleType() === 'gm') {
+        btnReturn.classList.remove('hidden');
+    } else {
+        btnReturn.classList.add('hidden');
+    }
+}
+
+export async function renderResultPlayerList() {
+    const listEl = document.getElementById('result-player-list');
+    listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4); text-align:center;">読み込み中...</p>';
+
+    try {
+        const { data: players, error } = await supabaseClient
+            .from('players')
+            .select('name, is_alive, role')
+            .order('name', { ascending: true });
+
+        if (error) throw error;
+
+        listEl.innerHTML = '';
+
+        if (!players || players.length === 0) {
+            listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4);">プレイヤー情報が見つかりません</p>';
+            return;
+        }
+
+        players.forEach((p, i) => {
+            const item = document.createElement('div');
+            // hideVoteDetails=ON の場合、役職でのスタイリングも行わない（人狼判定も隠す）
+            const isWolf = !getHideVoteDetails() && p.role === '人狼';
+            item.className = `result-player-item${isWolf ? ' is-wolf' : ''}`;
+            item.style.animationDelay = `${i * 0.08}s`;
+
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'result-player-name';
+            nameDiv.appendChild(document.createTextNode(p.name));
+
+            if (!p.is_alive) {
+                const deadMark = document.createElement('span');
+                deadMark.className = 'dead-mark';
+                deadMark.textContent = '（死亡）';
+                nameDiv.appendChild(deadMark);
+            }
+
+            // hideVoteDetails=ON の場合、役職バッジを表示しない（役職漏洩防止）
+            if (!getHideVoteDetails()) {
+                const roleBadge = document.createElement('span');
+                const badgeClass = ROLE_BADGE_CLASS[p.role] || 'role-badge-unknown';
+                roleBadge.className = `result-role-badge ${badgeClass}`;
+                roleBadge.textContent = p.role || '役職なし';
+                item.appendChild(roleBadge);
+            }
+
+            item.appendChild(nameDiv);
+            listEl.appendChild(item);
+        });
+
+    } catch (err) {
+        console.error('リザルトプレイヤー一覧取得エラー:', err);
+        listEl.innerHTML = '<p style="color:#f7768e;">プレイヤー情報の取得に失敗しました</p>';
+    }
+}
+
+// =============================================
+// 投票UI
+// =============================================
+export function renderVoteUI() {
+    const overlay = document.getElementById('vote-overlay');
+    const selectPanel = document.getElementById('vote-select');
+    const donePanel = document.getElementById('vote-done');
+    const ghostPanel = document.getElementById('vote-ghost');
+
+    overlay.classList.remove('hidden');
+    selectPanel.classList.add('hidden');
+    donePanel.classList.add('hidden');
+    ghostPanel.classList.add('hidden');
+
+    const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    if (!me || !me.is_alive) {
+        ghostPanel.classList.remove('hidden');
+        return;
+    }
+
+    if (getHasVotedToday() || me.vote_target_id) {
+        setHasVotedToday(true);
+        donePanel.classList.remove('hidden');
+    } else {
+        selectPanel.classList.remove('hidden');
+        renderVoteTargets();
+    }
+}
+
+export function renderVoteTargets() {
+    const list = document.getElementById('vote-target-list');
+    list.innerHTML = '';
+
+    const targets = getCurrentPlayers().filter(p => p.is_alive && p.name !== getMyPlayerName());
+
+    if (targets.length === 0) {
+        list.innerHTML = '<p style="color:#888;">投票できるプレイヤーがいません</p>';
+        return;
+    }
+
+    targets.forEach(t => {
+        const btn = document.createElement('button');
+        btn.className = 'target-btn';
+        btn.textContent = t.name;
+        btn.onclick = () => window.submitVote(t.name, t.id);
+        list.appendChild(btn);
+    });
+}
+
+export function updateVoteProgress() {
+    const alivePlayers = getCurrentPlayers().filter(p => p.is_alive);
+    const votedPlayers = alivePlayers.filter(p => p.vote_target_id);
+    const total = alivePlayers.length;
+    const voted = votedPlayers.length;
+
+    const textEl = document.getElementById('vote-progress-text');
+    const fillEl = document.getElementById('vote-progress-fill');
+    if (textEl) textEl.textContent = `投票完了：${voted} / ${total}人`;
+    if (fillEl) fillEl.style.width = total > 0 ? `${(voted / total) * 100}%` : '0%';
+
+    const pTextEl = document.getElementById('vote-progress-text-player');
+    const pFillEl = document.getElementById('vote-progress-fill-player');
+    if (pTextEl) pTextEl.textContent = `投票完了：${voted} / ${total}人`;
+    if (pFillEl) pFillEl.style.width = total > 0 ? `${(voted / total) * 100}%` : '0%';
+}
+
+export async function showVoteResult(exiledName, voteLog) {
+    const overlay = document.getElementById('vote-result-overlay');
+    overlay.classList.remove('hidden');
+
+    // 追放者の表示
+    const exileEl = document.getElementById('vote-result-exile');
+    exileEl.innerHTML = `🗳️ 「${exiledName}」が<br>追放されました`;
+
+    // 投票ログの描画
+    const listEl = document.getElementById('vote-result-list');
+    listEl.innerHTML = '';
+
+    // GM以外が呼び出した場合（Realtime経由）、自前で currentPlayers から voteLog を生成して全公開する
+    let finalVoteLog = voteLog;
+    if (!finalVoteLog) {
+        const idToName = {};
+        getCurrentPlayers().forEach(p => { idToName[p.id] = p.name; });
+        finalVoteLog = getCurrentPlayers()
+            .filter(p => p.vote_target_id)
+            .map(p => ({
+                voter: p.name,
+                target: idToName[p.vote_target_id] || '不明'
+            }));
+    }
+
+    if (getHideVoteDetails()) {
+        // ── シークレット投票モード: 票数集計のみ表示 ──
+        const tally = {};
+        if (finalVoteLog && finalVoteLog.length > 0) {
+            finalVoteLog.forEach(entry => {
+                if (entry.target) {
+                    tally[entry.target] = (tally[entry.target] || 0) + 1;
+                }
+            });
+        }
+
+        const secretHeader = document.createElement('div');
+        secretHeader.style.cssText = 'color:rgba(255,255,255,0.4); font-size:0.8rem; text-align:center; margin-bottom:0.6rem; letter-spacing:0.05em;';
+        secretHeader.textContent = '🔒 投票内容は非公開です';
+        listEl.appendChild(secretHeader);
+
+        const sorted = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+        if (sorted.length > 0) {
+            sorted.forEach(([name, count], i) => {
+                const item = document.createElement('div');
+                item.className = 'vote-log-item';
+                item.style.animationDelay = `${i * 0.07}s`;
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = name === exiledName ? 'target' : 'voter';
+                nameSpan.textContent = name === exiledName ? `${name} ★` : name;
+
+                const countSpan = document.createElement('span');
+                countSpan.className = 'arrow';
+                countSpan.textContent = `… ${count}票`;
+
+                item.appendChild(nameSpan);
+                item.appendChild(countSpan);
+                listEl.appendChild(item);
+            });
+        } else {
+            listEl.innerHTML += `<div style="color:rgba(255,255,255,0.4); font-size:0.85rem; text-align:center; padding:0.5rem;">投票記録がありません</div>`;
+        }
+    } else {
+        // ── 通常モード: 全ログ表示 ──
+        if (finalVoteLog && finalVoteLog.length > 0) {
+            finalVoteLog.forEach((entry, i) => {
+                const item = document.createElement('div');
+                item.className = 'vote-log-item';
+                item.style.animationDelay = `${i * 0.07}s`;
+
+                const voterSpan = document.createElement('span');
+                voterSpan.className = 'voter';
+                voterSpan.textContent = entry.voter;
+
+                const arrowSpan = document.createElement('span');
+                arrowSpan.className = 'arrow';
+                arrowSpan.textContent = '➡️';
+
+                const targetSpan = document.createElement('span');
+                if (entry.target) {
+                    targetSpan.className = 'target';
+                    targetSpan.textContent = entry.target === exiledName
+                        ? `${entry.target} ★`
+                        : entry.target;
+                } else {
+                    targetSpan.className = 'abstain';
+                    targetSpan.textContent = '（棄権）';
+                }
+
+                item.appendChild(voterSpan);
+                item.appendChild(arrowSpan);
+                item.appendChild(targetSpan);
+                listEl.appendChild(item);
+            });
+        } else {
+            listEl.innerHTML = `<div style="color:rgba(255,255,255,0.4); font-size:0.85rem; text-align:center; padding:0.5rem;">投票記録がありません</div>`;
+        }
+    }
+
+    // GMのみ「夜フェーズへ」ボタンを表示
+    const btnNight = document.getElementById('btn-next-night');
+    if (getMyRoleType() === 'gm') {
+        btnNight.classList.remove('hidden');
+    } else {
+        btnNight.classList.add('hidden');
+    }
+
+    // 全員：7秒カウントダウン後に自動で夜フェーズへ遷移（GMは手動ボタンでも可）
+    const countdownEl = document.getElementById('vote-countdown');
+    countdownEl.classList.remove('hidden');
+    let sec = 7;
+    countdownEl.textContent = `${sec}秒後に夜フェーズへ自動遷移...`;
+
+    if (getVoteCountdownTimer()) clearInterval(getVoteCountdownTimer());
+    const timer = setInterval(() => {
+        sec--;
+        if (sec <= 0) {
+            clearInterval(timer);
+            setVoteCountdownTimer(null);
+            window.proceedToNight();
+        } else {
+            countdownEl.textContent = `${sec}秒後に夜フェーズへ自動遷移...`;
+        }
+    }, 1000);
+    setVoteCountdownTimer(timer);
+}
+
+// =============================================
+// 朝フェーズ：犠牲者表示
+// =============================================
+export function showMorningVictims() {
+    const textEl = document.getElementById('victim-result-text');
+    if (!textEl) return;
+
+    const wolfTargetIds = getCurrentPlayers()
+        .filter(p => p.role === '人狼' && p.night_target_id)
+        .map(p => p.night_target_id);
+
+    const uniqueVictimIds = [...new Set(wolfTargetIds)];
+
+    if (uniqueVictimIds.length > 0) {
+        const victims = getCurrentPlayers().filter(p => uniqueVictimIds.includes(p.id) && !p.is_alive);
+        if (victims.length > 0) {
+            const victimNames = victims.map(v => v.name).join(' さん、');
+            textEl.innerHTML = `昨晩の犠牲者は <span style="color:#f7768e; font-weight:bold;">${victimNames} さん</span> でした。`;
+        } else {
+            textEl.innerHTML = '昨晩は誰も死にませんでした。';
+        }
+    } else {
+        textEl.innerHTML = '昨晩は誰も死にませんでした。';
+    }
+}
+
+// =============================================
+// 占い結果・霊媒結果表示
+// =============================================
+export async function showSeerResult() {
+    const resultArea = document.getElementById('seer-result-area');
+    const resultText = document.getElementById('seer-result-text');
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('players')
+            .select('night_result, night_target_id')
+            .eq('name', getMyPlayerName())
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (data && data.night_result && data.night_target_id) {
+            const target = getCurrentPlayers().find(p => p.id === data.night_target_id);
+            const targetName = target ? target.name : '不明';
+            const resultLabel = data.night_result === '人狼'
+                ? '<span style="color:#f7768e; font-weight:bold;">【人狼】</span>'
+                : '<span style="color:#9ece6a; font-weight:bold;">【人間】</span>';
+            resultText.innerHTML = `「${targetName}」さんは ${resultLabel} でした`;
+            resultArea.classList.remove('hidden');
+            document.getElementById('morning-overlay').classList.remove('hidden');
+        } else {
+            resultArea.classList.add('hidden');
+        }
+    } catch (err) {
+        console.warn('[SEER] 占い結果取得エラー:', err);
+        resultArea.classList.add('hidden');
+    }
+}
+
+export async function showMediumResult() {
+    const resultArea = document.getElementById('medium-result-area');
+    const resultText = document.getElementById('medium-result-text');
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('players')
+            .select('night_result, night_target_id')
+            .eq('name', getMyPlayerName())
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (data && data.night_result && data.night_target_id) {
+            const target = getCurrentPlayers().find(p => p.id === data.night_target_id);
+            const targetName = target ? target.name : '不明';
+            const resultLabel = data.night_result === '人狼'
+                ? '<span style="color:#f7768e; font-weight:bold;">【人狼】</span>'
+                : '<span style="color:#9ece6a; font-weight:bold;">【人間】</span>';
+            resultText.innerHTML = `🔮 霊媒結果: 「${targetName}」さんは ${resultLabel} でした`;
+            resultArea.classList.remove('hidden');
+            document.getElementById('morning-overlay').classList.remove('hidden');
+        } else {
+            resultArea.classList.add('hidden');
+        }
+    } catch (err) {
+        console.warn('[MEDIUM] 霊媒結果取得エラー:', err);
+        resultArea.classList.add('hidden');
+    }
+}
+
+// =============================================
+// GM用夜フェーズ行動状況インジケーター
+// =============================================
+export function renderNightActionStatus() {
+    const NIGHT_ACTION_ROLES = ['人狼', '預言者', '霊媒師', '騎士'];
+    const statusEl = document.getElementById('night-action-status');
+    if (!statusEl) return;
+
+    if (getMyRoleType() !== 'gm' || getLastKnownPhase() !== 'night') {
+        statusEl.classList.add('hidden');
+        return;
+    }
+
+    const alivePlayers = getCurrentPlayers().filter(p => p.is_alive && p.role);
+    if (alivePlayers.length === 0) {
+        statusEl.classList.add('hidden');
+        return;
+    }
+
+    statusEl.classList.remove('hidden');
+
+    const acted = alivePlayers.filter(p => !NIGHT_ACTION_ROLES.includes(p.role) || !!p.night_target_id).length;
+    const total = alivePlayers.length;
+
+    let html = `<div class="night-status-header"><span class="night-status-title">🌙 夜の行動状況</span><span class="night-status-count">${acted} / ${total}人 完了</span></div><div class="night-status-list">`;
+
+    alivePlayers.forEach(p => {
+        const needsAction = NIGHT_ACTION_ROLES.includes(p.role);
+        const hasActed = !needsAction || !!p.night_target_id;
+        const icon = hasActed ? '✅' : '⏳';
+        const statusClass = hasActed ? 'acted' : 'pending';
+        html += `<div class="night-status-item ${statusClass}"><span class="night-status-icon">${icon}</span><span class="night-status-name">${p.name}</span><span class="night-status-role">${needsAction ? p.role : '（行動なし）'}</span></div>`;
+    });
+
+    html += '</div>';
+    statusEl.innerHTML = html;
+}
+
+// =============================================
+// タイムライン描画・GM進行ボタン更新
+// =============================================
+export function renderTimeline() {
+    const listEl = document.getElementById('timeline-list');
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+    const currentTimelineIndex = getCurrentTimelineIndex();
+
+    GAME_TIMELINE.forEach((step, idx) => {
+        const item = document.createElement('div');
+        item.id = `timeline-item-${idx}`;
+
+        // 過去・現在・未来のクラス判定
+        let stateClass = 'is-future';
+        let pinIcon = '';
+
+        if (idx < currentTimelineIndex) {
+            stateClass = 'is-past';
+        } else if (idx === currentTimelineIndex) {
+            stateClass = 'is-current';
+            pinIcon = '📌 ';
+        }
+
+        item.className = `timeline-item ${stateClass}`;
+
+        item.innerHTML = `
+            <div class="timeline-period-badge">${step.period}</div>
+            <div class="timeline-label-text">${pinIcon}${step.label}</div>
+        `;
+
+        listEl.appendChild(item);
+
+        // 現在のステップを自動スクロールで視認しやすくする
+        if (idx === currentTimelineIndex) {
+            setTimeout(() => {
+                item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 100);
+        }
+    });
+}
+
+export function updateGmTimelineButtons() {
+    const btnNext = document.getElementById('btn-next-step');
+    const btnPrev = document.getElementById('btn-prev-step');
+    if (!btnNext || !btnPrev) return;
+
+    const currentTimelineIndex = getCurrentTimelineIndex();
+    const lastKnownPhase = getLastKnownPhase();
+    const pendingWinner = getPendingWinner();
+
+    // 【バグ2修正】勝者が確定済み（まだ result フェーズになっていない）場合は強制ジャンプボタンを表示
+    if (pendingWinner && lastKnownPhase !== 'result') {
+        btnNext.textContent = '⚔️ 勝利確定！→ 終礼（結果発表）へジャンプ ➔';
+        btnNext.style.opacity = '';
+        btnNext.style.cursor = '';
+        btnPrev.style.display = 'none';
+        return;
+    }
+
+    // 「戻る」ボタンの制御（最初の待機状態なら非表示）
+    if (currentTimelineIndex === 0 && lastKnownPhase === 'waiting') {
+        btnPrev.style.display = 'none';
+    } else {
+        btnPrev.style.display = 'inline-block';
+    }
+
+    // 「次へ進む」ボタンのテキスト設定（opacityなどのインラインスタイルを念のためリセット）
+    btnNext.style.opacity = '';
+    btnNext.style.cursor = '';
+
+    if (lastKnownPhase === 'waiting') {
+        btnNext.textContent = 'ゲーム開始 (役職確認へ) ➔';
+    } else if (lastKnownPhase === 'confirm_role') {
+        const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+        const nextPeriod = nextStep ? nextStep.period : '次';
+        btnNext.textContent = `[${nextPeriod}] 夜フェーズへ (1日目夜) ➔`;
+    } else if (lastKnownPhase === 'night') {
+        const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+        const nextPeriod = nextStep ? nextStep.period : '次';
+        btnNext.textContent = `[${nextPeriod}] 朝フェーズへ (犠牲者発表) ➔`;
+    } else if (lastKnownPhase === 'morning') {
+        const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+        const nextPeriod = nextStep ? nextStep.period : '次';
+        btnNext.textContent = `[${nextPeriod}] 朝を終了して議論を開始する ➔`;
+    } else if (lastKnownPhase === 'discussion') {
+        const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+        const nextPeriod = nextStep ? nextStep.period : '次';
+        btnNext.textContent = `[${nextPeriod}] 投票フェーズへ進む ➔`;
+    } else if (lastKnownPhase === 'voting') {
+        // 投票中か、結果表示中かで文言を変える
+        const voteResultOverlay = document.getElementById('vote-result-overlay');
+        if (voteResultOverlay && !voteResultOverlay.classList.contains('hidden')) {
+            const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+            if (nextStep) {
+                btnNext.textContent = `[${nextStep.period}] 次の夜フェーズへ進む ➔`;
+            } else {
+                btnNext.textContent = 'ゲーム終了判定へ ➔';
+            }
+        } else {
+            btnNext.textContent = '🗳️ 投票を強制締め切りする ➔';
+        }
+    } else if (lastKnownPhase === 'result') {
+        btnNext.textContent = 'ゲーム終了 (結果発表中)';
+        btnNext.style.opacity = '0.6';
+        btnNext.style.cursor = 'not-allowed';
+    }
+}
+
+// =============================================
+// 役職設定カウンター（GM専用）
+// =============================================
+export function initRoleCounters() {
+    const container = document.getElementById('role-counters');
+    container.innerHTML = '';
+    ROLES_INFO.forEach(role => {
+        const row = document.createElement('div');
+        row.className = 'role-row';
+        row.innerHTML = `
+            <div class="role-name-wrapper" style="display:flex; align-items:center; gap:0.5rem;">
+                <div class="role-name">${role.name}</div>
+                <button type="button" class="info-icon-btn" onclick="showRoleInfoModal('${role.id}')" style="background:transparent; border:none; color:var(--accent); cursor:pointer; font-size:1rem; padding:0;">ℹ️</button>
+            </div>
+            <div class="counter-group">
+                <button class="counter-btn" onclick="changeRoleCount('${role.id}', -1)">-</button>
+                <div id="count-${role.id}" class="role-count-display">0</div>
+                <button class="counter-btn" onclick="changeRoleCount('${role.id}', 1)">+</button>
+            </div>
+        `;
+        container.appendChild(row);
+    });
+    updateTotalInfo();
+}
+
+export function updateTotalInfo() {
+    // window._roleCounts はmain.jsでglobal公開されたroleCounts参照
+    const rc = window._roleCounts || {};
+    const totalRoles = Object.values(rc).reduce((a, b) => a + b, 0);
+    const totalInfoEl = document.getElementById('total-info');
+    const count = getCurrentPlayers().length;
+
+    document.getElementById('total-role-count').textContent = totalRoles;
+    document.getElementById('total-player-count').textContent = count;
+
+    if (totalRoles === count && count > 0) {
+        totalInfoEl.className = 'total-info total-ok';
+    } else {
+        totalInfoEl.className = 'total-info total-error';
+    }
+}
+
+// =============================================
+// 役職説明モーダル
+// =============================================
+export function openHelpModal() {
+    const modal = document.getElementById('help-modal');
+    modal.classList.remove('hidden');
+
+    const myHelpArea = document.getElementById('my-role-help-area');
+    const myHelpContent = document.getElementById('my-role-help-content');
+
+    // 役職確定状態（myRoleNameが存在する）かつ「確認中...」ではない場合
+    if (getMyRoleName() && getMyRoleName() !== '確認中...') {
+        const myRoleInfo = ROLES_INFO.find(r => r.name === getMyRoleName());
+        if (myRoleInfo) {
+            myHelpContent.innerHTML = generateRoleHelpHtml(myRoleInfo);
+            myHelpArea.classList.remove('hidden');
+        } else {
+            // 未確定（ロビー待機中など）
+            myHelpArea.classList.remove('hidden');
+            myHelpContent.innerHTML = '<p style="color:#888; text-align:center; margin: 0.5rem 0;">ゲーム開始後にあなたの役職が表示されます</p>';
+        }
+    } else {
+        // 未確定（ロビー待機中など）
+        myHelpArea.classList.remove('hidden');
+        myHelpContent.innerHTML = '<p style="color:#888; text-align:center; margin: 0.5rem 0;">ゲーム開始後にあなたの役職が表示されます</p>';
+    }
+
+    // 全役職一覧の描画（アコーディオン形式）
+    const accordion = document.getElementById('all-roles-accordion');
+    accordion.innerHTML = '';
+
+    ROLES_INFO.forEach(role => {
+        const item = document.createElement('div');
+        item.className = 'accordion-item';
+
+        const header = document.createElement('div');
+        header.className = 'accordion-header';
+        header.innerHTML = `<span>${role.name}</span> <span class="accordion-badge ${ROLE_BADGE_CLASS[role.name]}">${role.faction}</span>`;
+
+        const body = document.createElement('div');
+        body.className = 'accordion-body hidden';
+        body.innerHTML = generateRoleHelpDetailsHtml(role);
+
+        header.onclick = () => {
+            const isHidden = body.classList.contains('hidden');
+            document.querySelectorAll('.accordion-body').forEach(b => b.classList.add('hidden'));
+            document.querySelectorAll('.accordion-header').forEach(h => h.classList.remove('active'));
+            if (isHidden) {
+                body.classList.remove('hidden');
+                header.classList.add('active');
+            }
+        };
+
+        item.appendChild(header);
+        item.appendChild(body);
+        accordion.appendChild(item);
+    });
+}
+
+export function closeHelpModal() {
+    const modal = document.getElementById('help-modal');
+    modal.classList.add('hidden');
+}
+
+export function showRoleInfoModal(roleId) {
+    const role = ROLES_INFO.find(r => r.id === roleId);
+    if (!role) return;
+
+    const modal = document.getElementById('help-modal');
+    modal.classList.remove('hidden');
+
+    // 自分の役職説明エリアを非表示にする
+    document.getElementById('my-role-help-area').classList.add('hidden');
+
+    // 全役職リストのアコーディオンを描画
+    const accordion = document.getElementById('all-roles-accordion');
+    accordion.innerHTML = '';
+
+    ROLES_INFO.forEach(r => {
+        const item = document.createElement('div');
+        item.className = 'accordion-item';
+
+        const header = document.createElement('div');
+        header.className = 'accordion-header';
+        header.innerHTML = `<span>${r.name}</span> <span class="accordion-badge ${ROLE_BADGE_CLASS[r.name]}">${r.faction}</span>`;
+
+        const body = document.createElement('div');
+        body.className = 'accordion-body';
+        if (r.id !== roleId) {
+            body.classList.add('hidden');
+        } else {
+            header.classList.add('active');
+        }
+        body.innerHTML = generateRoleHelpDetailsHtml(r);
+
+        header.onclick = () => {
+            const isHidden = body.classList.contains('hidden');
+            document.querySelectorAll('.accordion-body').forEach(b => b.classList.add('hidden'));
+            document.querySelectorAll('.accordion-header').forEach(h => h.classList.remove('active'));
+            if (isHidden) {
+                body.classList.remove('hidden');
+                header.classList.add('active');
+            }
+        };
+
+        item.appendChild(header);
+        item.appendChild(body);
+        accordion.appendChild(item);
+    });
+}
+
+export function generateRoleHelpHtml(role) {
+    return `
+        <div class="role-help-card">
+            <div class="role-help-badge-row">
+                <span class="role-badge-large ${ROLE_BADGE_CLASS[role.name]}">${role.name}</span>
+                <span class="faction-badge">${role.faction}</span>
+            </div>
+            <p class="role-help-summary"><strong>概要:</strong> ${role.summary}</p>
+            <p class="role-help-details"><strong>詳細仕様:</strong> ${role.details}</p>
+            <p class="role-help-win"><strong>勝利条件:</strong> ${role.win_condition}</p>
+        </div>
+    `;
+}
+
+export function generateRoleHelpDetailsHtml(role) {
+    return `
+        <div class="role-help-body-content">
+            <p><strong>概要:</strong> ${role.summary}</p>
+            <p><strong>詳細仕様:</strong> ${role.details}</p>
+            <p><strong>勝利条件:</strong> ${role.win_condition}</p>
+        </div>
+    `;
+}
+
+// =============================================
+// 役職覗き見防止
+// =============================================
+export function toggleRoleReveal() {
+    const wrapper = document.getElementById('role-reveal-wrapper');
+    if (!wrapper) return;
+    wrapper.classList.toggle('is-revealed');
+}
+
+export function resetRoleCover() {
+    const wrapper = document.getElementById('role-reveal-wrapper');
+    if (wrapper) {
+        wrapper.classList.remove('is-revealed');
+    }
+}
+
+// =============================================
+// シークレット投票UI
+// =============================================
+export function updateHideVoteDetailsUI(value) {
+    const checkbox = document.getElementById('check-hide-vote-details');
+    if (checkbox) {
+        checkbox.checked = !!value;
+    }
+}
+
+// =============================================
+// 人狼チャット UI
+// =============================================
+export function updateWolfChatButtonVisibility() {
+    const btnWolfChat = document.getElementById('btn-wolf-chat');
+    if (!btnWolfChat) return;
+
+    if (getMyRoleType() === 'gm' || getMyRoleName() === '人狼') {
+        btnWolfChat.classList.remove('hidden');
+    } else {
+        btnWolfChat.classList.add('hidden');
+    }
+}
+
+export async function openWolfChatModal() {
+    const modal = document.getElementById('wolf-chat-modal');
+    if (!modal) return;
+
+    if (getMyRoleType() !== 'gm' && getMyRoleName() !== '人狼') {
+        alert('このチャットを開く権限がありません。');
+        return;
+    }
+
+    modal.classList.remove('hidden');
+
+    const gmForm = document.getElementById('gm-mission-form-area');
+    if (gmForm) {
+        if (getMyRoleType() === 'gm') {
+            gmForm.classList.remove('hidden');
+        } else {
+            gmForm.classList.add('hidden');
+        }
+    }
+
+    try {
+        const { data: mission, error: missionErr } = await supabaseClient
+            .from('werewolf_mission')
+            .select('mission_text')
+            .eq('id', 1)
+            .single();
+        if (!missionErr && mission) {
+            receiveMissionUpdate(mission.mission_text);
+        }
+
+        const { data: chats, error: chatErr } = await supabaseClient
+            .from('werewolf_chat')
+            .select('*')
+            .order('created_at', { ascending: true });
+        if (!chatErr && chats) {
+            renderChatHistory(chats);
+        }
+    } catch (e) {
+        console.error('チャットデータ初期ロードエラー:', e);
+    }
+}
+
+export function closeWolfChatModal() {
+    const modal = document.getElementById('wolf-chat-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+export function receiveChatMessage(data) {
+    const log = document.getElementById('wolf-chat-log');
+    if (!log) return;
+
+    // 重複描画を防ぐため、既に同じIDのメッセージが描画されていないか確認
+    const existingMsg = document.getElementById(`msg-${data.id}`);
+    if (existingMsg) return;
+
+    const msgDiv = document.createElement('div');
+    msgDiv.id = `msg-${data.id}`;
+    const isGm = data.sender_role === 'GM';
+    msgDiv.className = `chat-msg ${isGm ? 'is-gm' : 'is-wolf'}`;
+
+    const timeStr = data.created_at ? new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+    msgDiv.innerHTML = `
+        <div class="chat-msg-header">
+            <span class="chat-msg-sender">[${data.sender_role}] ${data.sender}</span>
+            <span class="chat-msg-time">${timeStr}</span>
+        </div>
+        <div class="chat-msg-body">${escapeHTML(data.message)}</div>
+    `;
+
+    log.appendChild(msgDiv);
+    log.scrollTop = log.scrollHeight;
+}
+
+export function receiveMissionUpdate(missionText) {
+    const displayArea = document.getElementById('wolf-mission-display-area');
+    const textEl = document.getElementById('wolf-mission-text');
+    if (!displayArea || !textEl) return;
+
+    if (missionText) {
+        textEl.textContent = missionText;
+        displayArea.classList.remove('hidden');
+    } else {
+        displayArea.classList.add('hidden');
+    }
+}
+
+export function renderChatHistory(messages) {
+    const log = document.getElementById('wolf-chat-log');
+    if (!log) return;
+    log.innerHTML = '';
+    messages.forEach(m => receiveChatMessage(m));
+}
+
+export function escapeHTML(str) {
+    return str.replace(/[&<>'"]/g,
+        tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+        }[tag] || tag)
+    );
+}
+
+
