@@ -240,6 +240,22 @@
         <div class="ghost-message">あなたは死亡しました<small>( 観戦モード )</small></div>
     </div>
 
+    <!-- 幽霊観戦モード：神視点バナー（死亡時に常時表示） -->
+    <div id="ghost-spectator-banner" class="ghost-spectator-banner hidden">
+        👻 あなたは幽霊（観戦者）です — <span id="ghost-spectator-label">神視点で全情報を観覧できます</span>
+    </div>
+
+    <!-- 幽霊観戦モード：神視点パネル（夜フェーズ中に全行動を表示） -->
+    <div id="ghost-spectator-panel" class="ghost-spectator-panel hidden">
+        <div class="ghost-panel-title">🌙 神視点：夜の行動状況（リアルタイム）</div>
+        <div id="ghost-night-actions" class="ghost-night-actions"></div>
+    </div>
+
+    <!-- 幽霊観戦モード：全員の役職一覧（神視点） -->
+    <div id="ghost-role-list-panel" class="ghost-spectator-panel hidden">
+        <div class="ghost-panel-title">👁️ 神視点：全プレイヤーの役職</div>
+        <div id="ghost-role-list" class="ghost-role-list"></div>
+    </div>
 
 
     <!-- ======================================

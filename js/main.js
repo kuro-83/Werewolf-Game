@@ -2,7 +2,7 @@
 // js/main.js
 // エントリーポイント：Supabase Realtime購読 & window公開
 // =============================================
-console.log("【最新版 2026/07/22】ESモジュール分割リファクタリング完了版");
+console.log("【最新版 2026/07/24】幽霊観戦モード（神視点UI） 実装済み");
 
 import { supabaseClient } from './config.js';
 import {
@@ -33,7 +33,9 @@ import {
     initRoleCounters, toggleMobileMemo,
     openHelpModal, closeHelpModal, showRoleInfoModal,
     toggleRoleReveal, openWolfChatModal, closeWolfChatModal,
-    updateVoteProgress, renderVoteUI, renderVoteTargets
+    updateVoteProgress, renderVoteUI, renderVoteTargets,
+    enableGhostSpectatorMode, disableGhostSpectatorMode,
+    renderGhostRoleList, renderGhostNightActions
 } from './ui.js';
 
 import {
