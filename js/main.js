@@ -100,7 +100,7 @@ window._roleCounts = roleCounts;
 // =============================================
 // joinGame のコールバック（state更新→setupGameView）
 // =============================================
-window._joinGameCallback = function(name, role, playerId) {
+window._joinGameCallback = function (name, role, playerId) {
     setMyPlayerName(name);
     setMyRoleType(role);
     saveSession(name, role, playerId);

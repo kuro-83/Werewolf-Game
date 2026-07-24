@@ -2121,8 +2121,15 @@ body.theme-result-teruteru {
 }
 
 @keyframes ghost-banner-in {
-    from { opacity: 0; transform: translateY(-100%); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-100%);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .ghost-spectator-banner #ghost-spectator-label {
@@ -2156,8 +2163,15 @@ body.theme-result-teruteru {
 /* パネルが両方あるとき縦に並ぶよう調整（JSで動的切り替えするため、片方のみ表示） */
 
 @keyframes ghost-panel-in {
-    from { opacity: 0; transform: translateY(20px) scale(0.97); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.97);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 .ghost-panel-title {
@@ -2191,8 +2205,15 @@ body.theme-result-teruteru {
 }
 
 @keyframes ghost-item-in {
-    from { opacity: 0; transform: translateX(10px); }
-    to   { opacity: 1; transform: translateX(0); }
+    from {
+        opacity: 0;
+        transform: translateX(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
 .ghost-night-action-item .gna-role {
