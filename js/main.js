@@ -2,7 +2,7 @@
 // js/main.js
 // エントリーポイント：Supabase Realtime購読 & window公開
 // =============================================
-console.log("【最新版 2026/07/24】幽霊観戦モード表示不具合・リアルタイム連携修正済み");
+console.log("【最新版 2026/07/24】霊界カメラ（視点切り替え式 幽霊モード）実装済み");
 
 import { supabaseClient } from './config.js';
 import {
@@ -35,7 +35,8 @@ import {
     toggleRoleReveal, openWolfChatModal, closeWolfChatModal,
     updateVoteProgress, renderVoteUI, renderVoteTargets,
     enableGhostSpectatorMode, disableGhostSpectatorMode,
-    renderGhostRoleList, renderGhostNightActions
+    renderGhostRoleList, renderGhostNightActions,
+    switchGhostViewTo
 } from './ui.js';
 
 import {
@@ -93,6 +94,7 @@ window.sendWolfChatMessage = sendWolfChatMessage;
 window.submitGmMission = submitGmMission;
 
 window.onHideVoteDetailsChange = onHideVoteDetailsChange;
+window.switchGhostViewTo = switchGhostViewTo;
 
 // roleCounts をwindow経由で ui.js の updateTotalInfo から参照できるように
 window._roleCounts = roleCounts;

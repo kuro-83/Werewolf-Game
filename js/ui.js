@@ -389,157 +389,287 @@ export function checkMyAliveStatus() {
 }
 
 /**
- * 幽霊観戦モードをONにする（神視点バナー＋各パネルを表示）
+ * 幽霊観戦モードをONにする（霊界カメラヘッダーを表示・視点を初期化）
  */
 export function enableGhostSpectatorMode() {
-    console.log('👻 [enableGhostSpectatorMode] 実行開始');
-    const banner = document.getElementById('ghost-spectator-banner');
-    if (banner) {
-        banner.classList.remove('hidden');
-        // hiddenクラスだけでは不十分な場合のため、displayを明示指定で強制表示
-        banner.style.display = 'block';
-        banner.style.zIndex = '9999';
-    }
-    // 神視点：全員の役職一覧を表示
-    renderGhostRoleList();
-    // 夜フェーズ中なら夜行動パネルも表示
-    if (getLastKnownPhase() === 'night') {
-        renderGhostNightActions();
-    } else {
-        const panel = document.getElementById('ghost-spectator-panel');
-        if (panel) panel.classList.add('hidden');
-    }
-    console.log('👻 [enableGhostSpectatorMode] 完了');
+    console.log('👻 [enableGhostSpectatorMode] 霊界カメラ起動');
+
+    // 既存の浮遊バナー/パネルは念のため隠す（残存DOM対策）
+    const oldBanner = document.getElementById('ghost-spectator-banner');
+    if (oldBanner) { oldBanner.classList.add('hidden'); oldBanner.style.display = ''; }
+    const oldPanel = document.getElementById('ghost-spectator-panel');
+    if (oldPanel) oldPanel.classList.add('hidden');
+    const oldRolePanel = document.getElementById('ghost-role-list-panel');
+    if (oldRolePanel) oldRolePanel.classList.add('hidden');
+
+    // bodyにghost-camera-activeクラスを付与（上部余白確保用）
+    document.body.classList.add('ghost-camera-active');
+
+    // 霊界カメラヘッダーを生成・表示
+    renderGhostCameraHeader();
 }
 
 /**
- * 幽霊観戦モードをOFFにする
+ * 幽霊観戦モードをOFFにする（霊界カメラヘッダーを隠す）
  */
 export function disableGhostSpectatorMode() {
-    const banner = document.getElementById('ghost-spectator-banner');
-    if (banner) {
-        banner.classList.add('hidden');
-        banner.style.display = '';
-    }
-    const panel = document.getElementById('ghost-spectator-panel');
-    if (panel) panel.classList.add('hidden');
-    const rolePanel = document.getElementById('ghost-role-list-panel');
-    if (rolePanel) rolePanel.classList.add('hidden');
+    const header = document.getElementById('ghost-camera-header');
+    if (header) header.classList.add('hidden');
+
+    // bodyのghost-camera-activeクラスを削除
+    document.body.classList.remove('ghost-camera-active');
+
+    // _ghostViewTargetNameをリセット（次の死亡時に再初期化させる）
+    window._ghostViewTargetName = null;
+
+    // 既存の浮遊バナー/パネルも念のため隠す
+    const oldBanner = document.getElementById('ghost-spectator-banner');
+    if (oldBanner) { oldBanner.classList.add('hidden'); oldBanner.style.display = ''; }
+    const oldPanel = document.getElementById('ghost-spectator-panel');
+    if (oldPanel) oldPanel.classList.add('hidden');
+    const oldRolePanel = document.getElementById('ghost-role-list-panel');
+    if (oldRolePanel) oldRolePanel.classList.add('hidden');
 }
 
 /**
- * 幽霊観戦モード：神視点 全プレイヤー役職一覧を描画
+ * 霊界カメラヘッダーを描画する（生存者タブ一覧を生成）
  */
-export function renderGhostRoleList() {
-    const panel = document.getElementById('ghost-role-list-panel');
-    const listEl = document.getElementById('ghost-role-list');
-    if (!panel || !listEl) return;
+function renderGhostCameraHeader() {
+    const header = document.getElementById('ghost-camera-header');
+    const tabs = document.getElementById('ghost-camera-tabs');
+    if (!header || !tabs) return;
 
     // 自分が死亡しているか確認
     const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
     if (!me || me.is_alive || getMyRoleType() !== 'player') {
-        panel.classList.add('hidden');
+        header.classList.add('hidden');
         return;
     }
 
-    panel.classList.remove('hidden');
-    // z-indexを明示指定で強制前面表示
-    panel.style.zIndex = '9990';
-    listEl.innerHTML = '';
+    header.classList.remove('hidden');
+    tabs.innerHTML = '';
 
-    const players = getCurrentPlayers();
-    if (players.length === 0) {
-        listEl.innerHTML = '<div style="color:rgba(255,255,255,0.3); font-size:0.8rem;">プレイヤー情報なし</div>';
+    const alivePlayers = getCurrentPlayers().filter(p => p.is_alive);
+
+    if (alivePlayers.length === 0) {
+        tabs.innerHTML = '<span class="ghost-camera-no-alive">生存者なし</span>';
         return;
     }
 
-    players.forEach((p, i) => {
-        const item = document.createElement('div');
-        item.className = `ghost-role-item${p.is_alive ? '' : ' is-dead'}`;
-        item.style.animationDelay = `${i * 0.05}s`;
+    // 現在選択中の視点（state管理）
+    const currentViewName = window._ghostViewTargetName || alivePlayers[0].name;
+    // 初期値を設定
+    if (!window._ghostViewTargetName) {
+        window._ghostViewTargetName = alivePlayers[0].name;
+    }
+
+    const ROLE_BADGE = {
+        '人狼': 'role-badge-wolf',
+        '市民': 'role-badge-citizen',
+        '預言者': 'role-badge-seer',
+        '霊媒師': 'role-badge-medium',
+        '騎士': 'role-badge-knight',
+        'てるてる': 'role-badge-teruteru'
+    };
+
+    alivePlayers.forEach(p => {
+        const btn = document.createElement('button');
+        btn.className = `ghost-camera-tab${p.name === currentViewName ? ' active' : ''}`;
+        btn.dataset.playerName = p.name;
 
         const nameSpan = document.createElement('span');
-        nameSpan.className = 'gri-name';
-        nameSpan.textContent = p.name + (p.is_alive ? '' : '（死亡）');
+        nameSpan.className = 'gct-name';
+        nameSpan.textContent = p.name;
 
         const roleBadge = document.createElement('span');
-        const ROLE_BADGE = {
-            '人狼': 'role-badge-wolf',
-            '市民': 'role-badge-citizen',
-            '預言者': 'role-badge-seer',
-            '霊媒師': 'role-badge-medium',
-            '騎士': 'role-badge-knight',
-            'てるてる': 'role-badge-teruteru'
-        };
-        roleBadge.className = `gri-badge ${ROLE_BADGE[p.role] || 'role-badge-unknown'}`;
+        roleBadge.className = `gct-role ${ROLE_BADGE[p.role] || 'role-badge-unknown'}`;
         roleBadge.textContent = p.role || '???';
 
-        item.appendChild(nameSpan);
-        item.appendChild(roleBadge);
-        listEl.appendChild(item);
+        btn.appendChild(nameSpan);
+        btn.appendChild(roleBadge);
+        btn.onclick = () => window.switchGhostViewTo(p.name);
+        tabs.appendChild(btn);
     });
+
+    // 現在の視点で画面を描画
+    renderGhostViewFor(currentViewName);
+}
+
+/**
+ * 霊界カメラ：指定プレイヤーの視点に切り替えてメイン画面を再描画
+ * @param {string} playerName - 視点切り替え対象のプレイヤー名
+ */
+export function switchGhostViewTo(playerName) {
+    console.log('👻 [switchGhostViewTo]', playerName);
+    window._ghostViewTargetName = playerName;
+
+    // タブのアクティブ状態を更新
+    const tabs = document.querySelectorAll('.ghost-camera-tab');
+    tabs.forEach(btn => {
+        if (btn.dataset.playerName === playerName) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // 指定プレイヤーの視点で画面を描画
+    renderGhostViewFor(playerName);
+}
+
+/**
+ * 指定プレイヤーのデータに基づいてメインエリアをジャック描画する
+ * @param {string} playerName - 視点対象プレイヤー名
+ */
+function renderGhostViewFor(playerName) {
+    const target = getCurrentPlayers().find(p => p.name === playerName);
+    if (!target) return;
+
+    const phase = getLastKnownPhase();
+
+    const ROLE_BADGE = {
+        '人狼': 'role-badge-wolf',
+        '市民': 'role-badge-citizen',
+        '預言者': 'role-badge-seer',
+        '霊媒師': 'role-badge-medium',
+        '騎士': 'role-badge-knight',
+        'てるてる': 'role-badge-teruteru'
+    };
+
+    // --- 役職エリア: 選択プレイヤーの「本当の役職」を開示表示 ---
+    const myRoleArea = document.getElementById('my-role-area');
+    if (myRoleArea) {
+        myRoleArea.classList.remove('hidden');
+        const roleNameEl = document.getElementById('my-role-name');
+        if (roleNameEl) {
+            roleNameEl.textContent = target.role || '???';
+            // 役職バッジのクラスを反映
+            roleNameEl.className = `my-role-name ghost-view-role ${ROLE_BADGE[target.role] || 'role-badge-unknown'}`;
+        }
+        // role-cover（タップして確認カバー）は幽霊視点なら常に開示状態にする
+        const revealWrapper = document.getElementById('role-reveal-wrapper');
+        if (revealWrapper) revealWrapper.classList.add('is-revealed');
+    }
+
+    // --- 夜フェーズ：選択プレイヤーの行動対象を表示（操作不可） ---
+    if (phase === 'night') {
+        const idToName = {};
+        getCurrentPlayers().forEach(p => { idToName[p.id] = p.name; });
+        const targetName = target.night_target_id ? (idToName[target.night_target_id] || '選択中…') : null;
+
+        // 夜フェーズオーバーレイを表示
+        const nightOverlay = document.getElementById('night-action-overlay');
+        if (nightOverlay) nightOverlay.classList.remove('hidden');
+
+        // 全夜UIを一旦隠す
+        ['night-wolf', 'night-seer', 'night-medium', 'night-knight', 'night-waiting'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('hidden');
+        });
+
+        // 対象プレイヤーの役職に応じたUIパネルを選択し、内容を書き換えて表示
+        const NIGHT_ACTION_ROLES = {
+            '人狼': 'night-wolf',
+            '預言者': 'night-seer',
+            '霊媒師': 'night-medium',
+            '騎士': 'night-knight'
+        };
+        const panelId = NIGHT_ACTION_ROLES[target.role] || 'night-waiting';
+        const panel = document.getElementById(panelId);
+
+        if (panel) {
+            panel.classList.remove('hidden');
+
+            // ターゲットリストを「霊界視点（非活性）」で再描画
+            const listId = {
+                'night-wolf': 'wolf-target-list',
+                'night-seer': 'seer-target-list',
+                'night-medium': 'medium-target-list',
+                'night-knight': 'knight-target-list'
+            }[panelId];
+
+            if (listId) {
+                const listEl = document.getElementById(listId);
+                if (listEl) {
+                    // 全プレイヤーを非活性ボタンで描画（選択中のものをハイライト）
+                    const candidates = getCurrentPlayers().filter(p =>
+                        panelId === 'night-medium' ? !p.is_alive : (p.is_alive && p.name !== target.name)
+                    );
+
+                    if (candidates.length === 0) {
+                        listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4); font-size:0.85rem;">対象なし</p>';
+                    } else {
+                        listEl.innerHTML = '';
+                        candidates.forEach(c => {
+                            const btn = document.createElement('button');
+                            btn.className = `target-btn ghost-view-btn${target.night_target_id === c.id ? ' ghost-selected' : ''}`;
+                            btn.textContent = c.name + (target.night_target_id === c.id ? ' ✅' : '');
+                            btn.disabled = true;  // 幽霊側は操作不可
+                            listEl.appendChild(btn);
+                        });
+                    }
+
+                    // 行動サブミットボタンも非活性化
+                    const submitBtnId = {
+                        'night-wolf': 'btn-wolf-attack',
+                        'night-seer': 'btn-seer-divinate',
+                        'night-medium': 'btn-medium-action',
+                        'night-knight': 'btn-knight-action'
+                    }[panelId];
+                    if (submitBtnId) {
+                        const submitBtn = document.getElementById(submitBtnId);
+                        if (submitBtn) {
+                            submitBtn.disabled = true;
+                            submitBtn.style.display = 'block';
+                            submitBtn.style.opacity = '0.3';
+                        }
+                    }
+                }
+            }
+
+            // 「誰を選択しているか」の情報テキストを追加（夜-waiting にも表示）
+            let ghostInfo = panel.querySelector('.ghost-view-info');
+            if (!ghostInfo) {
+                ghostInfo = document.createElement('div');
+                ghostInfo.className = 'ghost-view-info';
+                panel.appendChild(ghostInfo);
+            }
+            if (targetName) {
+                ghostInfo.innerHTML = `👁️ <strong>${target.name}</strong> の現在の選択: <span class="ghost-view-target-name">${targetName}</span>`;
+            } else {
+                ghostInfo.innerHTML = `👁️ <strong>${target.name}</strong> はまだ選択していません`;
+            }
+        }
+    }
+}
+
+/**
+ * 幽霊観戦モード：神視点 全プレイヤー役職一覧を描画
+ * (後方互換のため残置。霊界カメラヘッダーのtab描画内に統合済み)
+ */
+export function renderGhostRoleList() {
+    // 霊界カメラ方式では renderGhostCameraHeader() が役職バッジを表示するため、
+    // renderPlayerList から呼ばれるこの関数はヘッダー更新のみ行う
+    const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    if (!me || me.is_alive || getMyRoleType() !== 'player') return;
+    renderGhostCameraHeader();
 }
 
 /**
  * 幽霊観戦モード：神視点 夜の行動状況をリアルタイム描画
+ * (後方互換のため残置。霊界カメラ方式では renderGhostViewFor が担当)
  */
 export function renderGhostNightActions() {
-    const panel = document.getElementById('ghost-spectator-panel');
-    const listEl = document.getElementById('ghost-night-actions');
-    if (!panel || !listEl) return;
-
-    // 自分が死亡していて、夜フェーズであること
+    // 霊界カメラ方式ではswitchGhostViewTo/renderGhostViewForが担当
     const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
-    if (!me || me.is_alive || getMyRoleType() !== 'player' || getLastKnownPhase() !== 'night') {
-        panel.classList.add('hidden');
-        return;
+    if (!me || me.is_alive || getMyRoleType() !== 'player') return;
+    // 現在の視点で再描画
+    const currentViewName = window._ghostViewTargetName;
+    if (currentViewName) {
+        renderGhostViewFor(currentViewName);
+    } else {
+        renderGhostCameraHeader();
     }
-
-    panel.classList.remove('hidden');
-    // z-indexを明示指定で強制前面表示
-    panel.style.zIndex = '9990';
-    listEl.innerHTML = '';
-
-    const NIGHT_ACTION_ROLES = ['人狼', '預言者', '霊媒師', '騎士'];
-    const idToName = {};
-    getCurrentPlayers().forEach(p => { idToName[p.id] = p.name; });
-
-    const actionPlayers = getCurrentPlayers().filter(p => p.is_alive && NIGHT_ACTION_ROLES.includes(p.role));
-
-    if (actionPlayers.length === 0) {
-        listEl.innerHTML = '<div style="color:rgba(255,255,255,0.3); font-size:0.8rem;">行動役職なし</div>';
-        return;
-    }
-
-    actionPlayers.forEach((p, i) => {
-        const targetName = p.night_target_id ? (idToName[p.night_target_id] || '???') : null;
-
-        const item = document.createElement('div');
-        item.className = `ghost-night-action-item${targetName ? '' : ' no-action'}`;
-        item.style.animationDelay = `${i * 0.06}s`;
-
-        const roleSpan = document.createElement('span');
-        roleSpan.className = 'gna-role';
-        roleSpan.textContent = p.role;
-
-        const actorSpan = document.createElement('span');
-        actorSpan.className = 'gna-actor';
-        actorSpan.textContent = p.name;
-
-        const arrowSpan = document.createElement('span');
-        arrowSpan.className = 'gna-arrow';
-        arrowSpan.textContent = '→';
-
-        const targetSpan = document.createElement('span');
-        targetSpan.className = 'gna-target';
-        targetSpan.textContent = targetName || '（選択中…）';
-
-        item.appendChild(roleSpan);
-        item.appendChild(actorSpan);
-        item.appendChild(arrowSpan);
-        item.appendChild(targetSpan);
-        listEl.appendChild(item);
-    });
 }
 
 // =============================================
