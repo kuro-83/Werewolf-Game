@@ -2312,7 +2312,7 @@ body.theme-result-teruteru {
     top: 0;
     left: 0;
     right: 0;
-    z-index: 9999;
+    z-index: 10000;  /* あらゆる画面の前面に出るよう最高値 */
     background: linear-gradient(90deg, rgba(60, 0, 120, 0.97), rgba(30, 0, 70, 0.97));
     border-bottom: 1px solid rgba(180, 80, 255, 0.4);
     box-shadow: 0 3px 20px rgba(120, 0, 255, 0.3);
@@ -2322,6 +2322,7 @@ body.theme-result-teruteru {
     flex-direction: column;
     gap: 0.4rem;
     animation: ghost-camera-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: auto;  /* タップ・クリック必ず有効化 */
 }
 
 @keyframes ghost-camera-in {
@@ -2374,6 +2375,9 @@ body.theme-result-teruteru {
     cursor: pointer;
     transition: all 0.2s ease;
     font-family: 'Noto Sans JP', sans-serif;
+    pointer-events: auto;  /* タップ・クリック必ず有効化 */
+    position: relative;
+    z-index: 10001;  /* ヘッダー内でも最前面 */
 }
 
 .ghost-camera-tab:hover {
@@ -2409,6 +2413,12 @@ body.theme-result-teruteru {
 /* 幽霊視点でのメインエリア上部余白（ヘッダー分） */
 body.ghost-camera-active .game-layout {
     padding-top: calc(72px + env(safe-area-inset-top));
+}
+
+/* 霊界カメラ起動中は「あなたは死亡しました」全画面オーバーレイを強制非表示 */
+body.ghost-camera-active #ghost-mode-overlay {
+    display: none !important;
+    pointer-events: none !important;
 }
 
 /* ==============================

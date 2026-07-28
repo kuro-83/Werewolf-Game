@@ -376,14 +376,24 @@ export function checkMyAliveStatus() {
     const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
     console.log('👻 [checkMyAliveStatus] me=', me?.name, 'is_alive=', me?.is_alive);
     if (me && !me.is_alive) {
-        document.getElementById('ghost-mode-overlay').classList.remove('hidden');
+        // 霊界カメラ使用時は「あなたは死亡しました」全画面を即座に非表示にする
+        // （霊界カメラで他プレイヤーの視点を覗き見するため、画面をクリアにする）
+        const ghostModeOverlay = document.getElementById('ghost-mode-overlay');
+        if (ghostModeOverlay) {
+            ghostModeOverlay.classList.add('hidden');
+            ghostModeOverlay.style.display = 'none';
+        }
         document.getElementById('night-action-overlay').classList.add('hidden');
-        // 幽霊観戦モード：神視点UIを有効化
+        // 幽霊観戦モード：霊界カメラUIを有効化
         console.log('👻 幽霊モード有効化:', me);
         enableGhostSpectatorMode();
     } else {
-        document.getElementById('ghost-mode-overlay').classList.add('hidden');
-        // 生存中は神視点UIを非表示
+        // 生存中は ghost-mode-overlay も霊界カメラも非表示
+        const ghostModeOverlay = document.getElementById('ghost-mode-overlay');
+        if (ghostModeOverlay) {
+            ghostModeOverlay.classList.add('hidden');
+            ghostModeOverlay.style.display = '';
+        }
         disableGhostSpectatorMode();
     }
 }
@@ -393,6 +403,14 @@ export function checkMyAliveStatus() {
  */
 export function enableGhostSpectatorMode() {
     console.log('👻 [enableGhostSpectatorMode] 霊界カメラ起動');
+
+    // 「あなたは死亡しました」全画面オーバーレイを確実に非表示にする
+    // （これが残っていると霊界カメラの背面が真っ暗になり操作不能になる）
+    const ghostModeOverlay = document.getElementById('ghost-mode-overlay');
+    if (ghostModeOverlay) {
+        ghostModeOverlay.classList.add('hidden');
+        ghostModeOverlay.style.display = 'none';
+    }
 
     // 既存の浮遊バナー/パネルは念のため隠す（残存DOM対策）
     const oldBanner = document.getElementById('ghost-spectator-banner');

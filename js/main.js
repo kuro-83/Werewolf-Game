@@ -2,7 +2,7 @@
 // js/main.js
 // エントリーポイント：Supabase Realtime購読 & window公開
 // =============================================
-console.log("【最新版 2026/07/24】霊界カメラ（視点切り替え式 幽霊モード）実装済み");
+console.log("【最新版 2026/07/28 13:00】死亡オーバーレイ非表示＆霊界カメラ前面化 修正済み");
 
 import { supabaseClient } from './config.js';
 import {
