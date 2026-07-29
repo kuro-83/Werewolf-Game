@@ -50,8 +50,12 @@
         <aside id="left-sidebar" class="sidebar left-sidebar">
             <div class="sidebar-header">
                 <h3>📝 考察メモ (プライベート)</h3>
-                <button type="button" id="btn-close-memo" class="close-memo-btn"
-                    onclick="toggleMobileMemo()">&times;</button>
+                <div class="sidebar-header-actions">
+                    <button type="button" id="btn-reset-memos" class="reset-memos-btn"
+                        onclick="resetMemos()">🗑 リセット</button>
+                    <button type="button" id="btn-close-memo" class="close-memo-btn"
+                        onclick="toggleMobileMemo()">×</button>
+                </div>
             </div>
             <div id="memo-player-list" class="memo-player-list">
                 <!-- JSでプレイヤー一覧とメモ入力欄が動的に生成されます -->
@@ -271,6 +275,12 @@
             </div>
 
             <div id="vote-target-list" class="target-list"></div>
+
+            <!-- スキップボタン -->
+            <div style="margin-top: 1.2rem; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 1rem;">
+                <button type="button" id="btn-vote-skip" class="vote-skip-btn"
+                    onclick="submitVoteSkip()">⏭️ 今回はスキップ（誰も追放しない）</button>
+            </div>
         </div>
         <!-- 投票済：待機 -->
         <div id="vote-done" class="night-content hidden">
@@ -304,6 +314,8 @@
          リザルト画面（勝敗発表）オーバーレイ
          ====================================== -->
     <div id="result-overlay" class="result-overlay hidden">
+        <!-- 最上部：勝利陣営の大見出しバナー -->
+        <div id="result-winner-banner" class="result-winner-banner"></div>
         <div class="result-content">
             <!-- 勝利アイコン -->
             <span id="result-icon" class="result-icon">⚔️</span>

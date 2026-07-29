@@ -100,6 +100,39 @@ export function disableVoteButtons() {
     }
 }
 
+/**
+ * 投票スキップ（誰も追放しない）
+ * スキップ票は vote_target_id = null のままになる（棄権扱い）
+ */
+export async function submitVoteSkip() {
+    if (getLastKnownPhase() !== 'voting') return;
+    if (!confirm('今回の投票をスキップしますか？（棄権扱いになります）')) return;
+    if (getHasVotedToday()) return;
+
+    setHasVotedToday(true);
+
+    // ボタンを無効化
+    const buttons = document.querySelectorAll('#vote-target-list .target-btn, #btn-vote-skip');
+    buttons.forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.4';
+        btn.style.cursor = 'not-allowed';
+    });
+
+    try {
+        // スキップは vote_target_id を null のままにする（UPDATE不要）
+        // 単純に投票完了状態にするが、DB側の vote_target_id は nullのまま
+        setHasVotedToday(true);
+        document.getElementById('vote-select').classList.add('hidden');
+        const donePanel = document.getElementById('vote-done');
+        donePanel.classList.remove('hidden');
+        donePanel.querySelector('h2').textContent = '⏭️ スキップ';
+        donePanel.querySelector('p').textContent = '棄権しました。他のプレイヤーを待っています…';
+    } catch (err) {
+        console.error('スキップ処理エラー:', err);
+    }
+}
+
 export async function countAndExile() {
     if (getIsCountingVotes()) return;
     setIsCountingVotes(true);
@@ -312,10 +345,14 @@ export async function submitDivination() {
         if (error) throw error;
 
         setHasActedTonight(true);
+        // おわり：選び直し可能な完了画面へ
         document.getElementById('night-seer').classList.add('hidden');
-        document.getElementById('night-waiting').classList.remove('hidden');
-        document.getElementById('night-waiting').innerHTML = `
-            <h2>🔮 占い完了</h2><p style="color:#c0caf5;">占い完了。朝を待っています...</p>
+        const nightWaiting = document.getElementById('night-waiting');
+        nightWaiting.classList.remove('hidden');
+        nightWaiting.innerHTML = `
+            <h2>🔮 占い完了</h2>
+            <p style="color:#c0caf5;">「${selectedSeerTargetName}」を占いました。朝を待っています...<br><span style="font-size:0.8rem;opacity:0.6;">展開変更する場合は下のボタンから</span></p>
+            <button type="button" class="change-night-target-btn" onclick="changeNightTarget('seer')">&#x21bb; 占い相手を選び直す</button>
         `;
     } catch (err) {
         console.error('占いエラー:', err);
@@ -382,10 +419,14 @@ export async function submitMedium() {
         if (error) throw error;
 
         setHasActedTonight(true);
+        // おわり：選び直し可能な完了画面へ
         document.getElementById('night-medium').classList.add('hidden');
-        document.getElementById('night-waiting').classList.remove('hidden');
-        document.getElementById('night-waiting').innerHTML = `
-            <h2>🔮 霊媒完了</h2><p style="color:#c0caf5;">霊媒完了。朝を待っています...</p>
+        const nightWaiting = document.getElementById('night-waiting');
+        nightWaiting.classList.remove('hidden');
+        nightWaiting.innerHTML = `
+            <h2>🔮 霊媒完了</h2>
+            <p style="color:#c0caf5;">「${selectedMediumTargetName}」を霊媒しました。朝を待っています...<br><span style="font-size:0.8rem;opacity:0.6;">展開変更する場合は下のボタンから</span></p>
+            <button type="button" class="change-night-target-btn" onclick="changeNightTarget('medium')">&#x21bb; 霊媒相手を選び直す</button>
         `;
     } catch (err) {
         console.error('霊媒エラー:', err);
@@ -455,11 +496,14 @@ export async function submitAttack() {
         if (error) throw error;
 
         setHasActedTonight(true);
+        // おわり：選び直し可能な完了画面へ
         document.getElementById('night-wolf').classList.add('hidden');
-        document.getElementById('night-waiting').classList.remove('hidden');
-        document.getElementById('night-waiting').innerHTML = `
-            <h2>襲撃完了</h2>
-            <p style="color:#c0caf5;">今夜の任務を終えました。<br>静かに朝を待ちましょう…</p>
+        const nightWaiting = document.getElementById('night-waiting');
+        nightWaiting.classList.remove('hidden');
+        nightWaiting.innerHTML = `
+            <h2>🔪 襲撃完了（変更可）</h2>
+            <p style="color:#c0caf5;">「${selectedWolfTargetName}」を襲撃対象に設定しました。<br><span style="font-size:0.8rem;opacity:0.6;">夜明けまで変更可能です</span></p>
+            <button type="button" class="change-night-target-btn" onclick="changeNightTarget('wolf')">&#x21bb; 襲撃対象を選び直す</button>
         `;
     } catch (err) {
         console.error('襲撃送信エラー:', err);
@@ -529,16 +573,54 @@ export async function submitKnightGuard() {
         if (error) throw error;
 
         setHasActedTonight(true);
+        // おわり：選び直し可能な完了画面へ
         document.getElementById('night-knight').classList.add('hidden');
-        document.getElementById('night-waiting').classList.remove('hidden');
-        document.getElementById('night-waiting').innerHTML = `
-            <h2>🛡️ 守護完了</h2>
-            <p style="color:#c0caf5;">今夜の守護先を設定しました。<br>静かに朝を待ちましょう…</p>
+        const nightWaiting = document.getElementById('night-waiting');
+        nightWaiting.classList.remove('hidden');
+        nightWaiting.innerHTML = `
+            <h2>🛡️ 守護完了（変更可）</h2>
+            <p style="color:#c0caf5;">「${selectedKnightTargetName}」を守護対象に設定しました。<br><span style="font-size:0.8rem;opacity:0.6;">夜明けまで変更可能です</span></p>
+            <button type="button" class="change-night-target-btn" onclick="changeNightTarget('knight')">&#x21bb; 守護対象を選び直す</button>
         `;
     } catch (err) {
         console.error('守護送信エラー:', err);
         alert('守護の送信に失敗しました。');
         if (btn) btn.disabled = false;
+    }
+}
+
+// =============================================
+// 夜フェーズ：行動選び直し
+// =============================================
+/**
+ * 夜フェーズ中に行動を選び直す（送信済みでもターゲットを再選択できる）
+ * @param {'wolf'|'seer'|'medium'|'knight'} role - 役職種別
+ */
+export function changeNightTarget(role) {
+    if (getLastKnownPhase() !== 'night') return;
+
+    // 待檟画面を隐して行動選択画面を再表示
+    document.getElementById('night-waiting').classList.add('hidden');
+
+    // hasActedTonightをリセット（選び直し中は未行動扱い）
+    setHasActedTonight(false);
+
+    if (role === 'wolf') {
+        const panel = document.getElementById('night-wolf');
+        panel.classList.remove('hidden');
+        window.renderWolfTargets();
+    } else if (role === 'seer') {
+        const panel = document.getElementById('night-seer');
+        panel.classList.remove('hidden');
+        window.renderSeerTargets();
+    } else if (role === 'medium') {
+        const panel = document.getElementById('night-medium');
+        panel.classList.remove('hidden');
+        window.renderMediumTargets();
+    } else if (role === 'knight') {
+        const panel = document.getElementById('night-knight');
+        panel.classList.remove('hidden');
+        window.renderKnightTargets();
     }
 }
 

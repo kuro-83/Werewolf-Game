@@ -865,6 +865,31 @@ export function renderMemoList() {
 }
 
 // =============================================
+// 考察メモ 一括リセット
+// =============================================
+export function resetMemos() {
+    if (!confirm('全プレイヤーの考察メモを消去しますか？（この操作は元に戻せません）')) return;
+
+    const myPlayer = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    const myPlayerId = myPlayer ? myPlayer.id : null;
+    if (!myPlayerId) return;
+
+    // localStorageから全メモキーを削除
+    getCurrentPlayers().forEach(p => {
+        const key = `werewolf_memo_1_${myPlayerId}_${p.id}`;
+        localStorage.removeItem(key);
+    });
+
+    // 画面上のテキストエリアもクリア
+    const memoPlayerList = document.getElementById('memo-player-list');
+    if (memoPlayerList) {
+        memoPlayerList.querySelectorAll('.memo-textarea').forEach(ta => {
+            ta.value = '';
+        });
+    }
+}
+
+// =============================================
 // スマホ用メモドロワー
 // =============================================
 export function toggleMobileMemo() {
@@ -967,6 +992,21 @@ export async function showResultScreen() {
     } else {
         titleEl.className = `result-title ${isCitizen ? 'citizen' : 'wolf'}`;
         titleEl.textContent = isCitizen ? '市民チームの勝利！' : '人狼チームの勝利！';
+    }
+
+    // 大見出しバナーを更新
+    const bannerEl = document.getElementById('result-winner-banner');
+    if (bannerEl) {
+        if (isTeruteru) {
+            bannerEl.className = 'result-winner-banner teruteru-banner';
+            bannerEl.innerHTML = '🎈 てるてるの単独勝利！';
+        } else if (isCitizen) {
+            bannerEl.className = 'result-winner-banner citizen-banner';
+            bannerEl.innerHTML = '☀️ 市民陣営の勝利！';
+        } else {
+            bannerEl.className = 'result-winner-banner wolf-banner';
+            bannerEl.innerHTML = '🐺 人狼陣営の勝利！';
+        }
     }
 
     if (isTeruteru) {

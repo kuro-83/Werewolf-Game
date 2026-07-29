@@ -2,7 +2,7 @@
 // js/main.js
 // エントリーポイント：Supabase Realtime購読 & window公開
 // =============================================
-console.log("【最新版 2026/07/28 13:00】死亡オーバーレイ非表示＆霊界カメラ前面化 修正済み");
+console.log("【最新版 2026/07/28 13:30】QoLサクサク改善4セット（メモ削除・投票スキップ・夜選び直し・リザルト見出し）実装済み");
 
 import { supabaseClient } from './config.js';
 import {
@@ -36,7 +36,8 @@ import {
     updateVoteProgress, renderVoteUI, renderVoteTargets,
     enableGhostSpectatorMode, disableGhostSpectatorMode,
     renderGhostRoleList, renderGhostNightActions,
-    switchGhostViewTo
+    switchGhostViewTo,
+    resetMemos
 } from './ui.js';
 
 import {
@@ -53,7 +54,8 @@ import {
     advanceTimeline,
     onHideVoteDetailsChange,
     sendWolfChatMessage, submitGmMission,
-    clearSession, joinGame
+    clearSession, joinGame,
+    submitVoteSkip, changeNightTarget
 } from './action.js';
 
 // =============================================
@@ -95,6 +97,9 @@ window.submitGmMission = submitGmMission;
 
 window.onHideVoteDetailsChange = onHideVoteDetailsChange;
 window.switchGhostViewTo = switchGhostViewTo;
+window.resetMemos = resetMemos;
+window.submitVoteSkip = submitVoteSkip;
+window.changeNightTarget = changeNightTarget;
 
 // roleCounts をwindow経由で ui.js の updateTotalInfo から参照できるように
 window._roleCounts = roleCounts;
