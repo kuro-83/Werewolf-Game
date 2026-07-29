@@ -106,7 +106,7 @@ export function disableVoteButtons() {
  */
 export async function submitVoteSkip() {
     if (getLastKnownPhase() !== 'voting') return;
-    if (!confirm('今回の投票をスキップしますか？（棄権扱いになります）')) return;
+    if (!confirm('今回の投票をスキップしますか？（追放なしに1票として集計されます）')) return;
     if (getHasVotedToday()) return;
 
     setHasVotedToday(true);
@@ -120,16 +120,28 @@ export async function submitVoteSkip() {
     });
 
     try {
-        // スキップは vote_target_id を null のままにする（UPDATE不要）
-        // 単純に投票完了状態にするが、DB側の vote_target_id は nullのまま
-        setHasVotedToday(true);
+        // スキップ票: vote_target_id = '__skip__' のプレースホルダー値を使ってDBに書き込む
+        // （nullのままだと未投票と区別できないため、小数点第1位の文字列IDを使用）
+        // 注意: vote_target_idがUUID型の場合は'__skip__'を入れるとエラーになる。
+        // その場合は別列skip_vote(boolean)を使うか、または単純に0000...0のnil UUIDを使用する。
+        // ここでは「存在しないUUID = 00000000-0000-0000-0000-000000000000」をスキップ犰として扱う。
+        const SKIP_SENTINEL = '00000000-0000-0000-0000-000000000000';
+        const { error } = await supabaseClient
+            .from('players')
+            .update({ vote_target_id: SKIP_SENTINEL })
+            .eq('name', getMyPlayerName());
+
+        if (error) throw error;
+
         document.getElementById('vote-select').classList.add('hidden');
         const donePanel = document.getElementById('vote-done');
         donePanel.classList.remove('hidden');
         donePanel.querySelector('h2').textContent = '⏭️ スキップ';
-        donePanel.querySelector('p').textContent = '棄権しました。他のプレイヤーを待っています…';
+        donePanel.querySelector('p').textContent = '追放なしに1票。他のプレイヤーを待っています…';
     } catch (err) {
         console.error('スキップ処理エラー:', err);
+        // エラー時はフラグを戻す
+        setHasVotedToday(false);
     }
 }
 
@@ -160,12 +172,18 @@ export async function countAndExile() {
     const idToName = {};
     freshPlayers.forEach(p => { idToName[p.id] = p.name; });
 
-    // 票数集計（生存者への投票のみ有効）
+    // スキップのセンチネル値
+    const SKIP_SENTINEL = '00000000-0000-0000-0000-000000000000';
+
+    // スキップ票数を集計
+    const skipCount = alivePlayers.filter(p => p.vote_target_id === SKIP_SENTINEL).length;
+
+    // 票数集計（生存者への投票のみ有効。スキップセンチネルは除外）
     const aliveIds = new Set(alivePlayers.map(p => p.id));
     const voteCounts = {};
     alivePlayers.forEach(p => {
         const tid = p.vote_target_id;
-        if (tid && aliveIds.has(tid)) {
+        if (tid && tid !== SKIP_SENTINEL && aliveIds.has(tid)) {
             voteCounts[tid] = (voteCounts[tid] || 0) + 1;
         }
     });
@@ -173,16 +191,31 @@ export async function countAndExile() {
     // 投票ログ作成（答え合わせ用）
     const voteLog = alivePlayers.map(p => ({
         voter: p.name,
-        target: p.vote_target_id ? idToName[p.vote_target_id] : null
+        target: p.vote_target_id === SKIP_SENTINEL
+            ? '「スキップ」'
+            : (p.vote_target_id ? idToName[p.vote_target_id] : null)
     }));
+
+    // スキップ票が最多か同数の場合は処刑なし
+    const maxPlayerVotes = Object.keys(voteCounts).length > 0
+        ? Math.max(...Object.values(voteCounts))
+        : 0;
+
+    if (skipCount > 0 && skipCount >= maxPlayerVotes) {
+        // 処刑なしルート
+        console.log(`[VOTE] スキップ票 ${skipCount}票が最多のため追放なし`);
+        showVoteResult(null, voteLog);  // exiledName = null で処刑なしとして表示
+        return;
+    }
 
     // 最多票を特定（票なし・同数はランダム）
     let exiledId, exiledName;
 
     if (Object.keys(voteCounts).length === 0) {
-        const randomIdx = Math.floor(Math.random() * alivePlayers.length);
-        exiledId = alivePlayers[randomIdx].id;
-        exiledName = alivePlayers[randomIdx].name;
+        // 有効票が0票（全員スキップまたは棄権） → 処刑なし
+        console.log('[VOTE] 有効票。0。追放なし。');
+        showVoteResult(null, voteLog);
+        return;
     } else {
         const maxVotes = Math.max(...Object.values(voteCounts));
         const topIds = Object.keys(voteCounts).filter(id => voteCounts[id] === maxVotes);
@@ -213,7 +246,6 @@ export async function countAndExile() {
     if (isTeruteruExiled) {
         console.log('[VOTE] てるてるが追放されたため、てるてる単独勝利！');
         await triggerGameEnd('teruteru');
-        // GMは直接リザルトを表示（他クライアントは is_alive の Realtime イベントから呼ばれる）
         showVoteResult(exiledName, voteLog);
         return;
     }

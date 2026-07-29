@@ -709,6 +709,24 @@ body.theme-result-teruteru {
     display: flex;
     flex-direction: column;
     gap: 0.7rem;
+    max-height: 320px;
+    overflow-y: auto;
+    padding-right: 0.3rem;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.result-player-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.result-player-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.result-player-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
 }
 
 .result-player-item {

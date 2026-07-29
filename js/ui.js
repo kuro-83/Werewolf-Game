@@ -994,21 +994,6 @@ export async function showResultScreen() {
         titleEl.textContent = isCitizen ? '市民チームの勝利！' : '人狼チームの勝利！';
     }
 
-    // 大見出しバナーを更新
-    const bannerEl = document.getElementById('result-winner-banner');
-    if (bannerEl) {
-        if (isTeruteru) {
-            bannerEl.className = 'result-winner-banner teruteru-banner';
-            bannerEl.innerHTML = '🎈 てるてるの単独勝利！';
-        } else if (isCitizen) {
-            bannerEl.className = 'result-winner-banner citizen-banner';
-            bannerEl.innerHTML = '☀️ 市民陣営の勝利！';
-        } else {
-            bannerEl.className = 'result-winner-banner wolf-banner';
-            bannerEl.innerHTML = '🐺 人狼陣営の勝利！';
-        }
-    }
-
     if (isTeruteru) {
         document.getElementById('result-subtitle').textContent = '見事に追放（処刑）されました！';
     } else {
@@ -1133,8 +1118,10 @@ export function renderVoteTargets() {
 }
 
 export function updateVoteProgress() {
+    const SKIP_SENTINEL = '00000000-0000-0000-0000-000000000000';
     const alivePlayers = getCurrentPlayers().filter(p => p.is_alive);
-    const votedPlayers = alivePlayers.filter(p => p.vote_target_id);
+    // 投票済み：vote_target_idが設定されている（スキップセンチネル含む）
+    const votedPlayers = alivePlayers.filter(p => p.vote_target_id && p.vote_target_id !== null);
     const total = alivePlayers.length;
     const voted = votedPlayers.length;
 
@@ -1155,7 +1142,14 @@ export async function showVoteResult(exiledName, voteLog) {
 
     // 追放者の表示
     const exileEl = document.getElementById('vote-result-exile');
-    exileEl.innerHTML = `🗳️ 「${exiledName}」が<br>追放されました`;
+    if (exiledName) {
+        exileEl.innerHTML = `🗳️ 「${exiledName}」が<br>追放されました`;
+        exileEl.style.color = '';
+    } else {
+        // 処刑なし
+        exileEl.innerHTML = `⏭️ 本日は誰も追放されませんでした`;
+        exileEl.style.color = '#9ece6a';
+    }
 
     // 投票ログの描画
     const listEl = document.getElementById('vote-result-list');
