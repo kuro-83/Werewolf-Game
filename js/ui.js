@@ -4,7 +4,7 @@
 // =============================================
 
 import { supabaseClient } from './config.js';
-import { GAME_TIMELINE, phaseNames, ROLES_INFO, ROLE_BADGE_CLASS, NIGHT_ACTION_ROLES } from './config.js';
+import { GAME_TIMELINE, phaseNames, ROLES_INFO, ROLE_BADGE_CLASS, NIGHT_ACTION_ROLES, DUMMY_QUESTIONS } from './config.js';
 import {
     getMyPlayerName, getMyRoleType, getMyRoleName, setMyRoleName,
     getCurrentPlayers, setCurrentPlayers, setCurrentPlayersCount,
@@ -156,7 +156,7 @@ export async function updatePhaseDisplay(phase) {
         document.getElementById('vote-overlay').classList.add('hidden');
         document.getElementById('vote-progress-area').classList.add('hidden');
         document.getElementById('vote-result-overlay').classList.add('hidden');
-        document.getElementById('medium-result-area').classList.add('hidden');
+        hideMyNightResult();
         // waitingフェーズでは幽霊モードUIも消す
         disableGhostSpectatorMode();
         setHasActedTonight(false);
@@ -229,35 +229,23 @@ export async function updatePhaseDisplay(phase) {
                 // 昨晩の犠牲者の表示
                 showMorningVictims();
 
-                // 占い師の場合、占い結果を表示
-                if (getMyRoleName() === '預言者') {
-                    await showSeerResult();
-                } else {
-                    document.getElementById('seer-result-area').classList.add('hidden');
-                }
-                // 霊媒師の場合、霊媒結果を表示
-                if (getMyRoleName() === '霊媒師') {
-                    await showMediumResult();
-                } else {
-                    document.getElementById('medium-result-area').classList.add('hidden');
-                }
+                // 全員共通の「🌙 あなたの結果」カード
+                await showMyNightResult();
 
             } else if (phase === 'discussion') {
                 // ── 議論フェーズ（明るい昼）──
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('night-action-overlay').classList.add('hidden');
                 document.getElementById('morning-overlay').classList.add('hidden');
-                // 議論フェーズでは占い・霊媒結果は表示しない
-                document.getElementById('seer-result-area').classList.add('hidden');
-                document.getElementById('medium-result-area').classList.add('hidden');
+                // 議論フェーズでは「あなたの結果」カードは表示しない
+                hideMyNightResult();
 
             } else if (phase === 'confirm_role') {
                 // ── 役職確認フェーズ ──
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('night-action-overlay').classList.add('hidden');
                 document.getElementById('morning-overlay').classList.add('hidden');
-                document.getElementById('seer-result-area').classList.add('hidden');
-                document.getElementById('medium-result-area').classList.add('hidden');
+                hideMyNightResult();
 
             } else if (phase === 'night') {
                 // ── 夜フェーズ ──
@@ -265,9 +253,8 @@ export async function updatePhaseDisplay(phase) {
                 setHasVotedToday(false);
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('vote-result-overlay').classList.add('hidden');
-                // 占い結果エリアを隠す（夜フェーズ開始時）
-                document.getElementById('seer-result-area').classList.add('hidden');
-                document.getElementById('medium-result-area').classList.add('hidden');
+                // 「あなたの結果」カードを隠す（夜フェーズ開始時）
+                hideMyNightResult();
 
                 // ── 夜の画面 ──
                 // 役職がバレないよう、全員「名前を選ぶ → 決定する → 選択完了（選び直し可）」の同じ流れ・同じ見た目にする。
@@ -326,8 +313,7 @@ export async function updatePhaseDisplay(phase) {
                 document.getElementById('vote-overlay').classList.add('hidden');
                 document.getElementById('night-action-overlay').classList.add('hidden');
                 document.getElementById('morning-overlay').classList.add('hidden');
-                document.getElementById('seer-result-area').classList.add('hidden');
-                document.getElementById('medium-result-area').classList.add('hidden');
+                hideMyNightResult();
                 setHasActedTonight(false);
             }
         }
@@ -1365,68 +1351,83 @@ export function showMorningVictims() {
 }
 
 // =============================================
-// 占い結果・霊媒結果表示
+// 朝フェーズ：あなたの結果（全員共通のカード。本文だけ役職で変わる）
 // =============================================
-export async function showSeerResult() {
-    const resultArea = document.getElementById('seer-result-area');
-    const resultText = document.getElementById('seer-result-text');
+// 古い呼び出しの結果で新しい表示を上書きしないための連番
+let myResultRequestId = 0;
 
-    try {
-        const { data, error } = await supabaseClient
-            .from('players')
-            .select('night_result, night_target_id')
-            .eq('name', getMyPlayerName())
-            .maybeSingle();
-
-        if (error) throw error;
-
-        if (data && data.night_result && data.night_target_id) {
-            const target = getCurrentPlayers().find(p => p.id === data.night_target_id);
-            const targetName = target ? target.name : '不明';
-            const resultLabel = data.night_result === '人狼'
-                ? '<span style="color:#f7768e; font-weight:bold;">【人狼】</span>'
-                : '<span style="color:#9ece6a; font-weight:bold;">【人間】</span>';
-            resultText.innerHTML = `「${escapeHTML(targetName)}」さんは ${resultLabel} でした`;
-            resultArea.classList.remove('hidden');
-            document.getElementById('morning-overlay').classList.remove('hidden');
-        } else {
-            resultArea.classList.add('hidden');
-        }
-    } catch (err) {
-        console.warn('[SEER] 占い結果取得エラー:', err);
-        resultArea.classList.add('hidden');
-    }
+/** 本文は2行の枠。1行で済む文言は2行目を空にする（カードの高さを全員そろえるため） */
+function setMyResultLines(line1Html, line2Html = '') {
+    document.getElementById('my-result-line1').innerHTML = line1Html;
+    document.getElementById('my-result-line2').innerHTML = line2Html;
 }
 
-export async function showMediumResult() {
-    const resultArea = document.getElementById('medium-result-area');
-    const resultText = document.getElementById('medium-result-text');
+/**
+ * 「🌙 あなたの結果」カードを表示する
+ * 全員まず「確認中…」→ DB の自分の行を読む → 内容、の同じ流れにする（役職で待ち時間・表示の流れが変わらないように）
+ *   - 預言者・霊媒師：「〇〇」さんは【人狼／人間】でした（結果がまだ届いていなければ「確認中…」のまま。届いたら main.js から呼び直す）
+ *   - 人狼・騎士：あなたは「〇〇」さんを選びました
+ *   - ダミー質問：「（質問文）」→ あなたは「〇〇」さんを選びました（sessionStorage の昨晩の回答）
+ *   - 何も選ばなかった：昨晩は誰も選びませんでした
+ */
+export async function showMyNightResult() {
+    const area = document.getElementById('my-result-area');
+    if (!area) return;
 
+    const requestId = ++myResultRequestId;
+    area.classList.remove('hidden');
+    setMyResultLines('確認中…');
+
+    let data;
     try {
-        const { data, error } = await supabaseClient
+        const res = await supabaseClient
             .from('players')
-            .select('night_result, night_target_id')
+            .select('role, is_alive, night_result, night_target_id')
             .eq('name', getMyPlayerName())
             .maybeSingle();
-
-        if (error) throw error;
-
-        if (data && data.night_result && data.night_target_id) {
-            const target = getCurrentPlayers().find(p => p.id === data.night_target_id);
-            const targetName = target ? target.name : '不明';
-            const resultLabel = data.night_result === '人狼'
-                ? '<span style="color:#f7768e; font-weight:bold;">【人狼】</span>'
-                : '<span style="color:#9ece6a; font-weight:bold;">【人間】</span>';
-            resultText.innerHTML = `🔮 霊媒結果: 「${escapeHTML(targetName)}」さんは ${resultLabel} でした`;
-            resultArea.classList.remove('hidden');
-            document.getElementById('morning-overlay').classList.remove('hidden');
-        } else {
-            resultArea.classList.add('hidden');
-        }
+        if (res.error) throw res.error;
+        data = res.data;
     } catch (err) {
-        console.warn('[MEDIUM] 霊媒結果取得エラー:', err);
-        resultArea.classList.add('hidden');
+        // 取得に失敗したら「確認中…」のまま（次の Realtime 更新で呼び直される）
+        console.warn('[MORNING] あなたの結果の取得エラー:', err);
+        return;
     }
+    if (requestId !== myResultRequestId || getLastKnownPhase() !== 'morning') return;
+
+    if (data && data.night_target_id) {
+        const target = getCurrentPlayers().find(p => p.id === data.night_target_id);
+        const targetName = escapeHTML(target ? target.name : '不明');
+        const role = data.role || getMyRoleName();
+        const isInspector = role === '預言者' || role === '霊媒師';
+
+        if (isInspector && data.night_result) {
+            // 色で遠目に分からないよう、結果のラベルは本文と同じ色（太字のみ）
+            const label = data.night_result === '人狼' ? '<strong>【人狼】</strong>' : '<strong>【人間】</strong>';
+            setMyResultLines(`「${targetName}」さんは ${label} でした`);
+        } else if (isInspector && data.is_alive) {
+            // 結果がまだ届いていない → 「確認中…」のまま待つ
+        } else {
+            // 人狼・騎士（結果のない役職）や、夜のうちに死亡して結果が出ない預言者・霊媒師
+            setMyResultLines(`あなたは「${targetName}」さんを選びました`);
+        }
+        return;
+    }
+
+    // 朝のタイムライン番号は「昨晩の夜の番号 + 1」
+    const dummy = getDummyNightState(getCurrentTimelineIndex() - 1);
+    if (dummy && dummy.answerId) {
+        const question = DUMMY_QUESTIONS[dummy.q] || '';
+        setMyResultLines(`「${escapeHTML(question)}」`, `→ あなたは「${escapeHTML(dummy.answerName)}」さんを選びました`);
+        return;
+    }
+
+    setMyResultLines('昨晩は誰も選びませんでした');
+}
+
+export function hideMyNightResult() {
+    myResultRequestId++;
+    const area = document.getElementById('my-result-area');
+    if (area) area.classList.add('hidden');
 }
 
 // =============================================
@@ -1791,13 +1792,16 @@ export function updateHideVoteDetailsUI(value) {
 // 人狼チャット UI
 // =============================================
 export function updateWolfChatButtonVisibility() {
+    // 画面上部のボタンは GM 専用。人狼プレイヤーは役職カード（カバーの中）のボタンから開く
+    // （上部に人狼だけボタンが出ると、遠目で役職が分かってしまうため）
     const btnWolfChat = document.getElementById('btn-wolf-chat');
-    if (!btnWolfChat) return;
+    if (btnWolfChat) {
+        btnWolfChat.classList.toggle('hidden', getMyRoleType() !== 'gm');
+    }
 
-    if (getMyRoleType() === 'gm' || getMyRoleName() === '人狼') {
-        btnWolfChat.classList.remove('hidden');
-    } else {
-        btnWolfChat.classList.add('hidden');
+    const btnWolfChatRole = document.getElementById('btn-wolf-chat-role');
+    if (btnWolfChatRole) {
+        btnWolfChatRole.classList.toggle('hidden', !(getMyRoleType() === 'player' && getMyRoleName() === '人狼'));
     }
 }
 

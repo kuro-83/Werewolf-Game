@@ -29,7 +29,7 @@ import {
     updateWolfChatButtonVisibility, updateHideVoteDetailsUI,
     receiveChatMessage, receiveMissionUpdate,
     showVoteResult, checkMyAliveStatus, renderNightActionStatus,
-    showMorningVictims, showSeerResult, showMediumResult,
+    showMorningVictims, showMyNightResult,
     initRoleCounters, toggleMobileMemo,
     openHelpModal, closeHelpModal, showRoleInfoModal,
     toggleRoleReveal, openWolfChatModal, closeWolfChatModal,
@@ -269,11 +269,7 @@ async function startGameSync() {
                     const prevResult = prevPlayer ? prevPlayer.night_result : undefined;
                     if (payload.new.night_result !== prevResult && payload.new.night_result) {
                         console.log('[MORNING] night_result が到着。結果を再表示します。');
-                        if (getMyRoleName() === '預言者') {
-                            await showSeerResult();
-                        } else if (getMyRoleName() === '霊媒師') {
-                            await showMediumResult();
-                        }
+                        await showMyNightResult();
                     }
                 }
             }

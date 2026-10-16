@@ -26,7 +26,6 @@ import {
     updateGmTimelineButtons, initRoleCounters,
     updateWolfChatButtonVisibility, updateHideVoteDetailsUI,
     receiveChatMessage, receiveMissionUpdate,
-    showSeerResult, showMediumResult,
     getNightChoices, renderNightDone
 } from './ui.js';
 

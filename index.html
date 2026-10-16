@@ -74,6 +74,7 @@
                     style="margin-top: 0.5rem; text-align: center; display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
                     <button type="button" id="btn-help-rules" class="help-rules-btn" onclick="openHelpModal()">📖
                         役職・ルール確認</button>
+                    <!-- GM 専用。人狼プレイヤーは役職カードの中のボタンから開く -->
                     <button type="button" id="btn-wolf-chat" class="help-rules-btn hidden"
                         style="color:#f7768e; border-color:rgba(247,118,142,0.3);" onclick="openWolfChatModal()">🐺
                         人狼チャット</button>
@@ -86,6 +87,12 @@
                     <div class="my-role-title">あなたの役職</div>
                     <div class="role-reveal-wrapper" id="role-reveal-wrapper" onclick="toggleRoleReveal()">
                         <div id="my-role-name" class="my-role-name">確認中...</div>
+                        <!-- 全員共通の空き枠（高さは全員同じ）。人狼のときだけ中のボタンが出る -->
+                        <div class="role-card-actions">
+                            <button type="button" id="btn-wolf-chat-role" class="help-rules-btn hidden"
+                                style="color:#f7768e; border-color:rgba(247,118,142,0.3);"
+                                onclick="event.stopPropagation(); openWolfChatModal()">🐺 人狼チャット</button>
+                        </div>
                         <div id="role-cover" class="role-cover">
                             <div class="role-cover-icon">👁️</div>
                             <div class="role-cover-text">タップして役職を確認</div>
@@ -233,26 +240,25 @@
     <!-- ======================================
          朝フェーズ専用オーバーレイ（全プレイヤー共通）
          ====================================== -->
-    <div id="morning-overlay" class="night-overlay hidden">
+    <!-- カードは縦1列・同じ幅。役職がわからないよう、全員に同じ3枚を出す -->
+    <div id="morning-overlay" class="night-overlay morning-stack hidden">
         <!-- 共通：朝の案内メッセージ -->
-        <div id="morning-common" class="night-content">
+        <div id="morning-common" class="night-content morning-card">
             <h2 style="color: #e0af68;">🌅 朝になりました</h2>
             <p style="color:#c0caf5;">昨晩の行動結果を確認してください。<br>GMが議論開始を宣言するまでお待ちください。</p>
         </div>
         <!-- 全員共通：昨晩 of 犠牲者発表 -->
-        <div id="victim-result-area" class="night-content">
+        <div id="victim-result-area" class="night-content morning-card">
             <h2 style="color: #f7768e;">💀 昨晩の犠牲者</h2>
             <div id="victim-result-text" style="color:#c0caf5; font-size:1.1rem; margin-top:0.5rem;"></div>
         </div>
-        <!-- 占い師専用：占い結果 -->
-        <div id="seer-result-area" class="night-content hidden">
-            <h2 style="color: #bb9af7;">🔮 占い結果</h2>
-            <div id="seer-result-text" style="color:#c0caf5; font-size:1.1rem; margin-top:0.5rem;"></div>
-        </div>
-        <!-- 霊媒師専用：霊媒結果 -->
-        <div id="medium-result-area" class="night-content hidden">
-            <h2 style="color: #73daca;">🔮 霊媒結果</h2>
-            <div id="medium-result-text" style="color:#c0caf5; font-size:1.1rem; margin-top:0.5rem;"></div>
+        <!-- 全員共通：あなたの結果（本文だけ役職で変わる。中身は JS の showMyNightResult で入れる） -->
+        <div id="my-result-area" class="night-content morning-card">
+            <h2 class="my-result-title">🌙 あなたの結果</h2>
+            <div class="my-result-body">
+                <div id="my-result-line1" class="my-result-line1"></div>
+                <div id="my-result-line2" class="my-result-line2"></div>
+            </div>
         </div>
     </div>
 

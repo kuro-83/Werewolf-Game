@@ -117,11 +117,14 @@ export function clearSessionData() {
 // =============================================
 const DUMMY_NIGHT_KEY = 'werewolf_dummyNight';
 
-/** 今夜・自分の分の保存内容があれば返す（別の夜・別の人のものなら null） */
-export function getDummyNightState() {
+/**
+ * 指定した夜（省略時は今のタイムライン番号）・自分の分の保存内容があれば返す（別の夜・別の人のものなら null）
+ * @param {number} [night] - 夜のタイムライン番号（朝に「昨晩」の分を見るときは 今の番号 - 1）
+ */
+export function getDummyNightState(night = _currentTimelineIndex) {
     try {
         const st = JSON.parse(sessionStorage.getItem(DUMMY_NIGHT_KEY));
-        if (st && st.night === _currentTimelineIndex && st.name === _myPlayerName) return st;
+        if (st && st.night === night && st.name === _myPlayerName) return st;
     } catch (e) {
         // 保存内容が壊れている・ストレージが使えない場合は「なし」扱い
     }
