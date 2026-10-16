@@ -6,7 +6,7 @@ console.log("【最新版 2026/10/16 v2】夜フェーズのダミー質問追�
 
 import { supabaseClient } from './config.js';
 import {
-    getMyPlayerName, getMyRoleType, getMyRoleName,
+    getMyPlayerName, getMyPlayerId, isMyPlayer, getMyRoleType, getMyRoleName,
     getCurrentPlayers, setCurrentPlayers,
     getLastKnownPhase, setLastKnownPhase,
     getHasActedTonight,
@@ -17,9 +17,10 @@ import {
     getHideVoteDetails, setHideVoteDetails,
     getCurrentTimelineIndex, setCurrentTimelineIndex,
     getPendingWinner, setPendingWinner,
+    setMorningMessage,
     setMyPlayerName, setMyRoleType, setMyRoleName,
     roleCounts,
-    saveSession, restoreSessionData,
+    saveSession, restoreSessionData, clearSessionData,
     loginView, gameView, gmPanel, gmNameDisplay, phaseElement
 } from './state.js';
 
@@ -124,7 +125,7 @@ async function startGameSync() {
     try {
         const phaseRes = await supabaseClient
             .from('game_status')
-            .select('current_phase, winner, timeline_index, hide_vote_details')
+            .select('current_phase, winner, timeline_index, hide_vote_details, morning_message')
             .limit(1)
             .single();
         if (phaseRes.error) throw phaseRes.error;
@@ -136,13 +137,30 @@ async function startGameSync() {
         if (playersRes.error) throw playersRes.error;
 
         setCurrentPlayers(playersRes.data ? playersRes.data : []);
+
+        // ── 古いセッション（id を持っていない）の補完 ──
+        // 名前で自分の行を探して id を保存する。見つからない・同名が複数いて特定できない場合はログイン画面に戻す
+        if (getMyRoleType() === 'player' && !getMyPlayerId()) {
+            const matches = (playersRes.data || []).filter(p => p.name === getMyPlayerName());
+            if (matches.length === 1) {
+                saveSession(getMyPlayerName(), 'player', matches[0].id);
+                console.log('[SESSION] 古いセッションの id を補完しました:', matches[0].id);
+            } else {
+                console.warn(`[SESSION] 自分の行を特定できません（一致 ${matches.length} 件）。ログイン画面に戻します。`);
+                clearSessionData();
+                alert('参加情報が見つかりませんでした。もう一度参加してください。');
+                location.reload();
+                return;
+            }
+        }
+
         renderPlayerList();
         renderMemoList();
 
         // ── リロード時の幽霊状態復元 ──
         // 初期データ取得後、自分が死亡状態の場合は幽霊UIを有効化する
         if (getMyRoleType() === 'player') {
-            const myPlayerOnLoad = (playersRes.data || []).find(p => p.name === getMyPlayerName());
+            const myPlayerOnLoad = (playersRes.data || []).find(isMyPlayer);
             if (myPlayerOnLoad && !myPlayerOnLoad.is_alive) {
                 console.log('👻 [リロード復元] 死亡状態を検出 → 幽霊モードを有効化:', myPlayerOnLoad);
                 checkMyAliveStatus();
@@ -158,6 +176,9 @@ async function startGameSync() {
                 ? phaseRes.data.timeline_index
                 : 0
         );
+
+        // 朝の犠牲者の記録（朝の画面の表示より前にセットする）
+        setMorningMessage(phaseRes.data.morning_message ?? null);
 
         // シークレット投票設定を同期
         if (phaseRes.data.hide_vote_details !== undefined) {
@@ -190,6 +211,10 @@ async function startGameSync() {
                     setHideVoteDetails(!!payload.new.hide_vote_details);
                     updateHideVoteDetailsUI(getHideVoteDetails());
                 }
+                // 朝の犠牲者の記録（フェーズと同じ更新で届く。朝の画面の表示より前にセットする）
+                if (payload.new.morning_message !== undefined) {
+                    setMorningMessage(payload.new.morning_message);
+                }
                 await updatePhaseDisplay(payload.new.current_phase);
                 renderTimeline();
                 updateGmTimelineButtons();
@@ -209,7 +234,7 @@ async function startGameSync() {
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players' },
             async (payload) => {
                 const players = getCurrentPlayers();
-                const idx = players.findIndex(p => p.name === payload.new.name);
+                const idx = players.findIndex(p => String(p.id) === String(payload.new.id));
                 // 更新前の状態を保存（vote_target_id変化検知に使用）
                 const prevPlayer = idx !== -1 ? players[idx] : null;
                 const wasAlive = prevPlayer ? prevPlayer.is_alive : true;
@@ -235,7 +260,7 @@ async function startGameSync() {
                 }
 
                 // 自分が死亡した場合は霊界モードをチェック
-                if (getMyRoleType() === 'player' && payload.new.name === getMyPlayerName()) {
+                if (getMyRoleType() === 'player' && isMyPlayer(payload.new)) {
                     console.log('👻 [Realtime] 自プレイヤー更新検知 is_alive=', payload.new.is_alive, payload.new);
                     checkMyAliveStatus();
                     // is_alive が false になった瞬間を明示的に検知して幽霊モードを強制有効化
@@ -265,7 +290,7 @@ async function startGameSync() {
                 }
 
                 // 自分の night_result が「実際に変化」した場合→ 朝フェーズ中なら結果を再表示
-                if (getMyRoleType() === 'player' && payload.new.name === getMyPlayerName() && getLastKnownPhase() === 'morning') {
+                if (getMyRoleType() === 'player' && isMyPlayer(payload.new) && getLastKnownPhase() === 'morning') {
                     const prevResult = prevPlayer ? prevPlayer.night_result : undefined;
                     if (payload.new.night_result !== prevResult && payload.new.night_result) {
                         console.log('[MORNING] night_result が到着。結果を再表示します。');
@@ -277,8 +302,8 @@ async function startGameSync() {
         // プレイヤーの退出
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'players' },
             async (payload) => {
-                const myId = sessionStorage.getItem('werewolf_playerId');
-                const isMeKicked = (payload.old.id && String(payload.old.id) === String(myId)) || (payload.old.name === getMyPlayerName());
+                // DELETE の payload.old には既定で主キー（id）しか入らないので、id で判定する
+                const isMeKicked = isMyPlayer(payload.old);
 
                 if (isMeKicked && getMyRoleType() === 'player') {
                     sessionStorage.removeItem('werewolf_playerName');
@@ -297,10 +322,10 @@ async function startGameSync() {
                     if (!error && data) {
                         setCurrentPlayers(data);
                     } else {
-                        setCurrentPlayers(getCurrentPlayers().filter(p => p.name !== payload.old.name));
+                        setCurrentPlayers(getCurrentPlayers().filter(p => String(p.id) !== String(payload.old.id)));
                     }
                 } catch (err) {
-                    setCurrentPlayers(getCurrentPlayers().filter(p => p.name !== payload.old.name));
+                    setCurrentPlayers(getCurrentPlayers().filter(p => String(p.id) !== String(payload.old.id)));
                 }
 
                 renderPlayerList();

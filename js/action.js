@@ -5,7 +5,7 @@
 
 import { supabaseClient, GAME_TIMELINE, ROLES_INFO, DUMMY_QUESTIONS } from './config.js';
 import {
-    getMyPlayerName, getMyRoleType, getMyRoleName,
+    getMyPlayerName, getMyPlayerId, isMyPlayer, getMyRoleType, getMyRoleName,
     getCurrentPlayers, setCurrentPlayers,
     getLastKnownPhase,
     getHasActedTonight, setHasActedTonight,
@@ -52,7 +52,7 @@ export async function submitVote(targetName, targetId) {
         const { error } = await supabaseClient
             .from('players')
             .update({ vote_target_id: targetId })
-            .eq('name', getMyPlayerName());
+            .eq('id', getMyPlayerId());
 
         if (error) throw error;
 
@@ -130,7 +130,7 @@ export async function submitVoteSkip() {
         const { error } = await supabaseClient
             .from('players')
             .update({ vote_target_id: SKIP_SENTINEL })
-            .eq('name', getMyPlayerName());
+            .eq('id', getMyPlayerId());
 
         if (error) throw error;
 
@@ -404,7 +404,7 @@ async function saveNightTarget(selected) {
     const { error } = await supabaseClient
         .from('players')
         .update({ night_target_id: selected.id })
-        .eq('name', getMyPlayerName());
+        .eq('id', getMyPlayerId());
     if (error) throw error;
 }
 
@@ -491,7 +491,7 @@ export function changeNightTarget(kind) {
     if (!entry) return;
 
     // 死亡後（幽霊モード）に古い「選び直す」ボタンが残っていても何もしない
-    const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    const me = getCurrentPlayers().find(isMyPlayer);
     if (!me || !me.is_alive) return;
 
     // 完了画面を隠して選択画面を再表示
@@ -507,13 +507,13 @@ export function changeNightTarget(kind) {
 // =============================================
 // 追放処理・キック処理（GM専用）
 // =============================================
-export async function killPlayer(name) {
+export async function killPlayer(id, name) {
     if (!confirm(`本当に ${name} さんを追放（死亡）しますか？`)) return;
     try {
         const { error } = await supabaseClient
             .from('players')
             .update({ is_alive: false })
-            .eq('name', name);
+            .eq('id', id);
         if (error) throw error;
     } catch (err) {
         console.error('追放エラー:', err);
@@ -591,20 +591,53 @@ export async function distributeRolesAndStartGame() {
         [roleDeck[i], roleDeck[j]] = [roleDeck[j], roleDeck[i]];
     }
 
-    const { data: players, error } = await supabaseClient.from('players').select('name');
+    const { data: players, error } = await supabaseClient.from('players').select('id, name');
     if (error || !players) {
         alert('プレイヤー情報の取得に失敗しました');
         return false;
     }
+    // 設定を確認した直後に入退室があった場合は、配る前に中止する
+    if (players.length !== roleDeck.length) {
+        alert(`役職の合計人数（${roleDeck.length}人）と参加者数（${players.length}人）が一致しません！`);
+        return false;
+    }
+
+    const FAIL_MSG = '役職の配布に失敗しました。もう一度試してください。';
+    // 途中で失敗したときに、配りかけの役職を全員分消す
+    const rollbackRoles = async () => {
+        const { error: rollbackError } = await supabaseClient
+            .from('players')
+            .update({ role: null })
+            .neq('name', 'dummy_string_for_reset_12345');
+        if (rollbackError) console.error('役職の巻き戻しに失敗しました:', rollbackError);
+    };
 
     try {
         for (let i = 0; i < players.length; i++) {
-            await supabaseClient.from('players').update({ role: roleDeck[i] }).eq('name', players[i].name);
+            const { error: updateError } = await supabaseClient
+                .from('players')
+                .update({ role: roleDeck[i] })
+                .eq('id', players[i].id);
+            if (updateError) throw updateError;
+        }
+
+        // 配布後に取り直して、全員に役職が入っていること・役職ごとの人数が設定どおりであることを確認
+        const { data: dealt, error: checkError } = await supabaseClient.from('players').select('id, role');
+        if (checkError || !dealt) throw checkError || new Error('配布結果の取得に失敗');
+
+        const countRoles = list => list.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {});
+        const expected = countRoles(roleDeck);
+        const actual = countRoles(dealt.map(p => p.role));
+        const allDealt = dealt.length === roleDeck.length && dealt.every(p => p.role);
+        const countsMatch = Object.keys({ ...expected, ...actual }).every(r => expected[r] === actual[r]);
+        if (!allDealt || !countsMatch) {
+            throw new Error(`配布結果が設定と一致しません expected=${JSON.stringify(expected)} actual=${JSON.stringify(actual)}`);
         }
         return true;
     } catch (e) {
-        console.error(e);
-        alert('役職の配布中にエラーが発生しました。');
+        console.error('役職配布エラー:', e);
+        await rollbackRoles();
+        alert(FAIL_MSG);
         return false;
     }
 }
@@ -680,12 +713,17 @@ export async function handlePhaseChange(newPhase, newTimelineIndex = null) {
         setHasVotedToday(false);
         setIsCountingVotes(false);
     }
+    // 朝の犠牲者の記録（game_status.morning_message）。undefined のときは書き換えない
+    // 例: '{"victim_ids":["<id>"]}'、犠牲者なしは '{"victim_ids":[]}'、記録なし（集計エラー・夜に入る）は null
+    let morningMessage;
     // 夜フェーズから朝フェーズ（morning）または議論フェーズ（discussion）へ移行する場合：占い師・霊媒師の結果を集計、および人狼の襲撃集計
     if (getLastKnownPhase() === 'night' && (newPhase === 'morning' || newPhase === 'discussion')) {
         // 占い師・霊媒師の集計（同じ役職が複数いても全員分を処理する）
         await applyInspectionResults('預言者', 'SEER');
         await applyInspectionResults('霊媒師', 'MEDIUM');
         // 人狼の襲撃および騎士の守護集計
+        // 集計がエラーになった夜は記録なし（null）にして、朝の表示は従来の推測ロジックに任せる
+        morningMessage = null;
         try {
             // 1. 生存している人狼の night_target_id を取得
             const { data: wolvesData, error: wolvesErr } = await supabaseClient
@@ -725,15 +763,18 @@ export async function handlePhaseChange(newPhase, newTimelineIndex = null) {
 
                 if (killErr) throw killErr;
                 console.log(`[WOLF/KNIGHT] handlePhaseChange 襲撃対象を死亡に更新しました (ID: ${victimId})`);
+                morningMessage = JSON.stringify({ victim_ids: [victimId] });
             } else {
                 console.log('[WOLF/KNIGHT] handlePhaseChange 襲撃は発生しなかったか、騎士によって守られました。');
+                morningMessage = JSON.stringify({ victim_ids: [] });
             }
         } catch (evalErr) {
             console.warn('[WOLF/KNIGHT] handlePhaseChange 襲撃・守護集計スキップ/エラー:', evalErr);
         }
     }
-    // 夜フェーズへ移行する場合、各種ターゲット・投票をリセット
+    // 夜フェーズへ移行する場合、各種ターゲット・投票・朝の犠牲者の記録をリセット
     if (newPhase === 'night') {
+        morningMessage = null;
         try {
             const { error: nightResetError } = await supabaseClient
                 .from('players')
@@ -750,12 +791,25 @@ export async function handlePhaseChange(newPhase, newTimelineIndex = null) {
     if (newTimelineIndex !== null) {
         updateData.timeline_index = newTimelineIndex;
     }
+    // 犠牲者の記録はフェーズと同じ更新に入れて、全員に同じ Realtime イベントで届くようにする
+    if (morningMessage !== undefined) {
+        updateData.morning_message = morningMessage;
+    }
 
     try {
-        const { error } = await supabaseClient
+        let { error } = await supabaseClient
             .from('game_status')
             .update(updateData)
             .eq('id', 1);
+        if (error && 'morning_message' in updateData) {
+            // 犠牲者の記録が書けなくてもゲームが止まらないよう、記録なしでフェーズだけ進める
+            console.warn('morning_message 付きのフェーズ更新に失敗。記録なしで再試行します:', error);
+            delete updateData.morning_message;
+            ({ error } = await supabaseClient
+                .from('game_status')
+                .update(updateData)
+                .eq('id', 1));
+        }
         if (error) throw error;
     } catch (error) {
         console.error('フェーズ更新エラー:', error);
@@ -809,7 +863,7 @@ export async function resetGame() {
         // game_status を waiting に戻す
         const { error: phaseError } = await supabaseClient
             .from('game_status')
-            .update({ current_phase: 'waiting', winner: null, timeline_index: 0, hide_vote_details: false })
+            .update({ current_phase: 'waiting', winner: null, timeline_index: 0, hide_vote_details: false, morning_message: null })
             .eq('id', 1);
 
         if (phaseError) {
@@ -1097,6 +1151,22 @@ export async function joinGame(role) {
             const chatLog = document.getElementById('wolf-chat-log');
             if (chatLog) chatLog.innerHTML = '';
         } else if (role === 'player') {
+            // 同じ名前の人がいると誰が誰か分からなくなるので、参加させない（DB 側に一意制約はない）
+            const { data: sameName, error: sameNameError } = await supabaseClient
+                .from('players')
+                .select('id')
+                .eq('name', name);
+            if (sameNameError) {
+                alert('参加に失敗しました。もう一度お試しください。');
+                restoreButtons();
+                return;
+            }
+            if (sameName && sameName.length > 0) {
+                alert('同じ名前の人がもう参加しています。別の名前にしてください。');
+                restoreButtons();
+                return;
+            }
+
             const { data, error } = await supabaseClient
                 .from('players')
                 .insert([{ name: name }])

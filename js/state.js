@@ -22,6 +22,7 @@ export const gmHint = document.getElementById('gm-hint');
 // 状態変数（内部保持）
 // =============================================
 let _myPlayerName = '';
+let _myPlayerId = null;   // players.id（プレイヤーの特定は名前ではなく id で行う。GM は null）
 let _myRoleType = '';   // 'gm' or 'player'
 let _myRoleName = '';
 let _currentPlayers = [];   // { id, name, is_alive, role, vote_target_id }
@@ -35,6 +36,7 @@ let _voteCountdownTimer = null;  // カウントダウンタイマー ID
 let _hideVoteDetails = false;   // シークレット投票フラグ
 let _currentTimelineIndex = 0;
 let _pendingWinner = null;
+let _morningMessage = null; // game_status.morning_message（朝の犠牲者の記録。JSON 文字列）
 export let roleCounts = { wolf: 0, citizen: 0, seer: 0, medium: 0, knight: 0, teruteru: 0 };
 
 // =============================================
@@ -42,6 +44,12 @@ export let roleCounts = { wolf: 0, citizen: 0, seer: 0, medium: 0, knight: 0, te
 // =============================================
 export const getMyPlayerName = () => _myPlayerName;
 export const setMyPlayerName = (v) => { _myPlayerName = v; };
+
+export const getMyPlayerId = () => _myPlayerId;
+export const setMyPlayerId = (v) => { _myPlayerId = v; };
+
+/** そのプレイヤー（players の行）が自分か。sessionStorage から戻した id は文字列なので文字列で比べる */
+export const isMyPlayer = (p) => !!p && _myPlayerId != null && String(p.id) === String(_myPlayerId);
 
 export const getMyRoleType = () => _myRoleType;
 export const setMyRoleType = (v) => { _myRoleType = v; };
@@ -79,6 +87,9 @@ export const setHideVoteDetails = (v) => { _hideVoteDetails = v; };
 export const getCurrentTimelineIndex = () => _currentTimelineIndex;
 export const setCurrentTimelineIndex = (v) => { _currentTimelineIndex = v; };
 
+export const getMorningMessage = () => _morningMessage;
+export const setMorningMessage = (v) => { _morningMessage = v; };
+
 export const getPendingWinner = () => _pendingWinner;
 export const setPendingWinner = (v) => { _pendingWinner = v; };
 
@@ -90,7 +101,11 @@ export function saveSession(name, roleType, id = null) {
     sessionStorage.setItem('werewolf_roleType', roleType);
     if (id) {
         sessionStorage.setItem('werewolf_playerId', id);
+    } else {
+        // GM など id のない参加。同じタブの前回のプレイヤー id を残さない
+        sessionStorage.removeItem('werewolf_playerId');
     }
+    _myPlayerId = id || null;
 }
 
 export function restoreSessionData() {
@@ -99,6 +114,8 @@ export function restoreSessionData() {
     if (savedName && savedRole) {
         _myPlayerName = savedName;
         _myRoleType = savedRole;
+        // 古いセッションでは id が無いことがある（main.js の startGameSync で名前から補完する）
+        _myPlayerId = sessionStorage.getItem('werewolf_playerId') || null;
         return true;
     }
     return false;
@@ -108,6 +125,7 @@ export function clearSessionData() {
     sessionStorage.removeItem('werewolf_playerName');
     sessionStorage.removeItem('werewolf_roleType');
     sessionStorage.removeItem('werewolf_playerId');
+    _myPlayerId = null;
     clearDummyNightState();
 }
 

@@ -6,7 +6,7 @@
 import { supabaseClient } from './config.js';
 import { GAME_TIMELINE, phaseNames, ROLES_INFO, ROLE_BADGE_CLASS, NIGHT_ACTION_ROLES, DUMMY_QUESTIONS } from './config.js';
 import {
-    getMyPlayerName, getMyRoleType, getMyRoleName, setMyRoleName,
+    getMyPlayerName, getMyPlayerId, isMyPlayer, getMyRoleType, getMyRoleName, setMyRoleName,
     getCurrentPlayers, setCurrentPlayers, setCurrentPlayersCount,
     getLastKnownPhase, setLastKnownPhase,
     getHasActedTonight, setHasActedTonight,
@@ -18,6 +18,7 @@ import {
     getCurrentTimelineIndex,
     getPendingWinner,
     getDummyNightState, clearDummyNightState,
+    getMorningMessage,
     playerListArea, myRoleArea, roleSettingsArea, gmHint, playerList, phaseElement
 } from './state.js';
 
@@ -61,9 +62,8 @@ function canPickAtNight(kind, p) {
  * @returns {{ player: object, selectable: boolean }[]}
  */
 export function getNightChoices(kind) {
-    const me = getMyPlayerName();
     const byName = (a, b) => a.name.localeCompare(b.name, 'ja');
-    const others = getCurrentPlayers().filter(p => p.name !== me);
+    const others = getCurrentPlayers().filter(p => !isMyPlayer(p));
     const alive = others.filter(p => p.is_alive).sort(byName);
     const dead = others.filter(p => !p.is_alive).sort(byName);
     return [...alive, ...dead].map(p => ({ player: p, selectable: canPickAtNight(kind, p) }));
@@ -203,7 +203,7 @@ export async function updatePhaseDisplay(phase) {
             await fetchMyRole();
             checkMyAliveStatus();
 
-            const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+            const me = getCurrentPlayers().find(isMyPlayer);
             const isMeAlive = me ? me.is_alive : false;
 
             if (phase === 'voting') {
@@ -269,7 +269,7 @@ export async function updatePhaseDisplay(phase) {
                         const { data: myData } = await supabaseClient
                             .from('players')
                             .select('night_target_id')
-                            .eq('name', getMyPlayerName())
+                            .eq('id', getMyPlayerId())
                             .single();
                         if (myData && myData.night_target_id) {
                             // DBにnight_target_idが存在する → 今夜すでに行動済み
@@ -329,7 +329,7 @@ export async function fetchMyRole() {
         const { data, error } = await supabaseClient
             .from('players')
             .select('role')
-            .eq('name', getMyPlayerName())
+            .eq('id', getMyPlayerId())
             .single();
 
         if (error || !data) {
@@ -359,7 +359,7 @@ export async function fetchMyRole() {
             const { data } = await supabaseClient
                 .from('players')
                 .select('id')
-                .eq('name', getMyPlayerName());
+                .eq('id', getMyPlayerId());
             if (!data || data.length === 0) {
                 sessionStorage.removeItem('werewolf_playerName');
                 sessionStorage.removeItem('werewolf_roleType');
@@ -379,7 +379,7 @@ export async function fetchMyRole() {
 // 生存状態チェック
 // =============================================
 export function checkMyAliveStatus() {
-    const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    const me = getCurrentPlayers().find(isMyPlayer);
     console.log('👻 [checkMyAliveStatus] me=', me?.name, 'is_alive=', me?.is_alive);
     if (me && !me.is_alive) {
         // 霊界カメラ使用時は「あなたは死亡しました」全画面を即座に非表示にする
@@ -464,7 +464,7 @@ function renderGhostCameraHeader() {
     if (!header || !tabs) return;
 
     // 自分が死亡しているか確認
-    const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    const me = getCurrentPlayers().find(isMyPlayer);
     if (!me || me.is_alive || getMyRoleType() !== 'player') {
         header.classList.add('hidden');
         return;
@@ -677,7 +677,7 @@ function renderGhostViewFor(playerName) {
 export function renderGhostRoleList() {
     // 霊界カメラ方式では renderGhostCameraHeader() が役職バッジを表示するため、
     // renderPlayerList から呼ばれるこの関数はヘッダー更新のみ行う
-    const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    const me = getCurrentPlayers().find(isMyPlayer);
     if (!me || me.is_alive || getMyRoleType() !== 'player') return;
     renderGhostCameraHeader();
 }
@@ -688,7 +688,7 @@ export function renderGhostRoleList() {
  */
 export function renderGhostNightActions() {
     // 霊界カメラ方式ではswitchGhostViewTo/renderGhostViewForが担当
-    const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    const me = getCurrentPlayers().find(isMyPlayer);
     if (!me || me.is_alive || getMyRoleType() !== 'player') return;
     // 現在の視点で再描画
     const currentViewName = window._ghostViewTargetName;
@@ -706,7 +706,7 @@ export function renderPlayerList() {
     playerList.innerHTML = '';
 
     // 自分が死亡中（幽霊）かどうか
-    const myPlayer = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    const myPlayer = getCurrentPlayers().find(isMyPlayer);
     const iAmGhost = getMyRoleType() === 'player' && myPlayer && !myPlayer.is_alive;
 
     getCurrentPlayers().forEach(p => {
@@ -722,7 +722,7 @@ export function renderPlayerList() {
                 const btn = document.createElement('button');
                 btn.className = 'btn-kill';
                 btn.textContent = '追放';
-                btn.onclick = () => window.killPlayer(p.name);
+                btn.onclick = () => window.killPlayer(p.id, p.name);
                 div.appendChild(btn);
             } else {
                 const badge = document.createElement('span');
@@ -783,7 +783,7 @@ export function renderMemoList() {
     if (!memoPlayerList) return;
 
     // ログイン中の自分のプレイヤー情報を探索してIDを取得
-    const myPlayer = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    const myPlayer = getCurrentPlayers().find(isMyPlayer);
     const myPlayerId = myPlayer ? myPlayer.id : null;
 
     // 自分自身の情報が取得できるまで待機（初期ロード対策）
@@ -879,7 +879,7 @@ export function renderMemoList() {
 export function resetMemos() {
     if (!confirm('全プレイヤーの考察メモを消去しますか？（この操作は元に戻せません）')) return;
 
-    const myPlayer = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    const myPlayer = getCurrentPlayers().find(isMyPlayer);
     const myPlayerId = myPlayer ? myPlayer.id : null;
     if (!myPlayerId) return;
 
@@ -1091,7 +1091,7 @@ export function renderVoteUI() {
     donePanel.classList.add('hidden');
     ghostPanel.classList.add('hidden');
 
-    const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    const me = getCurrentPlayers().find(isMyPlayer);
     if (!me || !me.is_alive) {
         ghostPanel.classList.remove('hidden');
         return;
@@ -1110,7 +1110,7 @@ export function renderVoteTargets() {
     const list = document.getElementById('vote-target-list');
     list.innerHTML = '';
 
-    const targets = getCurrentPlayers().filter(p => p.is_alive && p.name !== getMyPlayerName());
+    const targets = getCurrentPlayers().filter(p => p.is_alive && !isMyPlayer(p));
 
     if (targets.length === 0) {
         list.innerHTML = '<p style="color:#888;">投票できるプレイヤーがいません</p>';
@@ -1178,7 +1178,7 @@ export async function showVoteResult(exiledName, voteLog) {
     }
 
     // 幽霊（死亡プレイヤー）は hideVoteDetails が ON でも全ログを見られる（神視点）
-    const myPlayerForVote = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    const myPlayerForVote = getCurrentPlayers().find(isMyPlayer);
     const iAmGhostForVote = getMyRoleType() === 'player' && myPlayerForVote && !myPlayerForVote.is_alive;
 
     if (getHideVoteDetails() && !iAmGhostForVote) {
@@ -1327,24 +1327,43 @@ export async function showVoteResult(exiledName, voteLog) {
 // =============================================
 // 朝フェーズ：犠牲者表示
 // =============================================
+/**
+ * game_status.morning_message（'{"victim_ids":[...]}'）から犠牲者の id を取り出す
+ * 記録がない・壊れている場合は null
+ */
+function parseMorningVictimIds(message) {
+    if (typeof message !== 'string' || !message) return null;
+    try {
+        const parsed = JSON.parse(message);
+        return parsed && Array.isArray(parsed.victim_ids) ? parsed.victim_ids : null;
+    } catch (e) {
+        console.warn('[MORNING] morning_message を読めませんでした:', message);
+        return null;
+    }
+}
+
 export function showMorningVictims() {
     const textEl = document.getElementById('victim-result-text');
     if (!textEl) return;
 
-    const wolfTargetIds = getCurrentPlayers()
-        .filter(p => p.role === '人狼' && p.night_target_id)
-        .map(p => p.night_target_id);
+    const players = getCurrentPlayers();
+    let victims;
 
-    const uniqueVictimIds = [...new Set(wolfTargetIds)];
+    // 夜→朝の集計で記録した「実際に襲撃で死亡した人」を表示する
+    const recordedIds = parseMorningVictimIds(getMorningMessage());
+    if (recordedIds) {
+        victims = recordedIds.map(id => players.find(p => p.id === id)).filter(Boolean);
+    } else {
+        // 記録が読めないときだけ、従来どおり「人狼が選んだ人のうち死んでいる人」から推測する
+        const wolfTargetIds = [...new Set(players
+            .filter(p => p.role === '人狼' && p.night_target_id)
+            .map(p => p.night_target_id))];
+        victims = players.filter(p => wolfTargetIds.includes(p.id) && !p.is_alive);
+    }
 
-    if (uniqueVictimIds.length > 0) {
-        const victims = getCurrentPlayers().filter(p => uniqueVictimIds.includes(p.id) && !p.is_alive);
-        if (victims.length > 0) {
-            const victimNames = victims.map(v => escapeHTML(v.name)).join(' さん、');
-            textEl.innerHTML = `昨晩の犠牲者は <span style="color:#f7768e; font-weight:bold;">${victimNames} さん</span> でした。`;
-        } else {
-            textEl.innerHTML = '昨晩は誰も死にませんでした。';
-        }
+    if (victims.length > 0) {
+        const victimNames = victims.map(v => escapeHTML(v.name)).join(' さん、');
+        textEl.innerHTML = `昨晩の犠牲者は <span style="color:#f7768e; font-weight:bold;">${victimNames} さん</span> でした。`;
     } else {
         textEl.innerHTML = '昨晩は誰も死にませんでした。';
     }
@@ -1383,7 +1402,7 @@ export async function showMyNightResult() {
         const res = await supabaseClient
             .from('players')
             .select('role, is_alive, night_result, night_target_id')
-            .eq('name', getMyPlayerName())
+            .eq('id', getMyPlayerId())
             .maybeSingle();
         if (res.error) throw res.error;
         data = res.data;
@@ -1440,7 +1459,7 @@ export function renderNightActionStatus() {
     if (getMyRoleType() !== 'gm' || getLastKnownPhase() !== 'night') {
         statusEl.classList.add('hidden');
         // 幽霊プレイヤーの夜行動パネルも更新
-        const myP = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+        const myP = getCurrentPlayers().find(isMyPlayer);
         if (getMyRoleType() === 'player' && myP && !myP.is_alive && getLastKnownPhase() === 'night') {
             renderGhostNightActions();
         } else if (getMyRoleType() === 'player') {
