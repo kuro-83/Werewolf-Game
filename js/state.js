@@ -108,4 +108,38 @@ export function clearSessionData() {
     sessionStorage.removeItem('werewolf_playerName');
     sessionStorage.removeItem('werewolf_roleType');
     sessionStorage.removeItem('werewolf_playerId');
+    clearDummyNightState();
+}
+
+// =============================================
+// 夜のダミー質問（DBには保存せず、この端末の sessionStorage だけで持つ）
+// { night: タイムライン番号, name: プレイヤー名, q: 質問番号, answerId, answerName }
+// =============================================
+const DUMMY_NIGHT_KEY = 'werewolf_dummyNight';
+
+/** 今夜・自分の分の保存内容があれば返す（別の夜・別の人のものなら null） */
+export function getDummyNightState() {
+    try {
+        const st = JSON.parse(sessionStorage.getItem(DUMMY_NIGHT_KEY));
+        if (st && st.night === _currentTimelineIndex && st.name === _myPlayerName) return st;
+    } catch (e) {
+        // 保存内容が壊れている・ストレージが使えない場合は「なし」扱い
+    }
+    return null;
+}
+
+export function saveDummyNightState(st) {
+    try {
+        sessionStorage.setItem(DUMMY_NIGHT_KEY, JSON.stringify(st));
+    } catch (e) {
+        console.warn('[DUMMY] sessionStorage への保存に失敗しました:', e);
+    }
+}
+
+export function clearDummyNightState() {
+    try {
+        sessionStorage.removeItem(DUMMY_NIGHT_KEY);
+    } catch (e) {
+        // 何もしない
+    }
 }

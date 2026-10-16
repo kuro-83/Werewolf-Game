@@ -4,7 +4,7 @@
 // =============================================
 
 import { supabaseClient } from './config.js';
-import { GAME_TIMELINE, phaseNames, ROLES_INFO, ROLE_BADGE_CLASS } from './config.js';
+import { GAME_TIMELINE, phaseNames, ROLES_INFO, ROLE_BADGE_CLASS, NIGHT_ACTION_ROLES } from './config.js';
 import {
     getMyPlayerName, getMyRoleType, getMyRoleName, setMyRoleName,
     getCurrentPlayers, setCurrentPlayers, setCurrentPlayersCount,
@@ -17,11 +17,81 @@ import {
     getHideVoteDetails,
     getCurrentTimelineIndex,
     getPendingWinner,
+    getDummyNightState, clearDummyNightState,
     playerListArea, myRoleArea, roleSettingsArea, gmHint, playerList, phaseElement
 } from './state.js';
 
 // 循環依存を避けるため、action.jsの関数はimport onDemandではなく引数/コールバックで受け取る
 // ただし実際は同一モジュールバンドルではないため、window経由で呼ぶ設計にする
+
+// =============================================
+// 夜フェーズ：全員共通の選択画面の部品
+// =============================================
+// 夜アクションがある役職 → パネル種別（ここにない役職はダミー質問）
+const NIGHT_KIND_BY_ROLE = {
+    '人狼': 'wolf',
+    '預言者': 'seer',
+    '霊媒師': 'medium',
+    '騎士': 'knight'
+};
+const NIGHT_PANEL_IDS = ['night-wolf', 'night-seer', 'night-medium', 'night-knight', 'night-dummy', 'night-waiting'];
+const NIGHT_RENDER_FUNCS = {
+    wolf: 'renderWolfTargets',
+    seer: 'renderSeerTargets',
+    medium: 'renderMediumTargets',
+    knight: 'renderKnightTargets',
+    dummy: 'renderDummyTargets'
+};
+
+/**
+ * 夜の選択肢（全員同じ並び順になるよう名前順に並べる）
+ * @param {'wolf'|'seer'|'medium'|'knight'|'dummy'} kind
+ */
+export function getNightCandidates(kind) {
+    const me = getMyPlayerName();
+    const players = getCurrentPlayers();
+    let list;
+    if (kind === 'medium') {
+        list = players.filter(p => !p.is_alive);
+    } else if (kind === 'knight') {
+        list = players.filter(p => p.is_alive);
+    } else if (kind === 'wolf') {
+        // 自分を含む人狼全員は襲撃候補から除外
+        list = players.filter(p => p.is_alive && p.name !== me && p.role !== '人狼');
+    } else {
+        // 預言者・ダミー質問：自分以外の生存者
+        list = players.filter(p => p.is_alive && p.name !== me);
+    }
+    return [...list].sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+}
+
+/** 今夜、自分にどのパネルを出すか */
+export function getMyNightKind() {
+    const role = getMyRoleName();
+    const kind = NIGHT_ACTION_ROLES.includes(role) ? NIGHT_KIND_BY_ROLE[role] : null;
+    // 夜アクションがない役職、または選べる相手がいない（死者のいない夜の霊媒師など）→ ダミー質問
+    if (!kind || getNightCandidates(kind).length === 0) return 'dummy';
+    return kind;
+}
+
+/**
+ * 全員共通の「選択完了」画面を表示する
+ * @param {string} kind - 選び直し時に開くパネル種別
+ * @param {string|null} pickedName - 選んだ相手の名前
+ */
+export function renderNightDone(kind, pickedName) {
+    const el = document.getElementById('night-waiting');
+    el.classList.remove('hidden');
+    const pickedHtml = pickedName
+        ? `<p class="night-picked">（${escapeHTML(pickedName)}さんを選びました）</p>`
+        : '';
+    el.innerHTML = `
+        <h2 class="night-panel-title">✅ 選択完了</h2>
+        <p class="night-question">朝を待っています…</p>
+        ${pickedHtml}
+        <button type="button" class="change-night-target-btn" onclick="changeNightTarget('${kind}')">&#x21bb; 選び直す</button>
+    `;
+}
 
 // =============================================
 // フェーズ表示・メインUI更新
@@ -86,6 +156,7 @@ export async function updatePhaseDisplay(phase) {
         // waitingフェーズでは幽霊モードUIも消す
         disableGhostSpectatorMode();
         setHasActedTonight(false);
+        clearDummyNightState();
         setHasVotedToday(false);
         setIsCountingVotes(false);
         if (getVoteCountdownTimer()) { clearInterval(getVoteCountdownTimer()); setVoteCountdownTimer(null); }
@@ -194,10 +265,15 @@ export async function updatePhaseDisplay(phase) {
                 document.getElementById('seer-result-area').classList.add('hidden');
                 document.getElementById('medium-result-area').classList.add('hidden');
 
-                // ── リロード対策: Supabase の night_target_id を確認して行動済フラグを復元 ──
-                // フェーズ変更（新しい夜）の場合のみリセット、リロードの場合はDBから状態を復元する
-                const NIGHT_ACTION_ROLES_RELOAD = ['人狼', '預言者', '霊媒師', '騎士'];
-                if (isMeAlive && NIGHT_ACTION_ROLES_RELOAD.includes(getMyRoleName())) {
+                // ── 夜の画面 ──
+                // 役職がバレないよう、全員「名前を選ぶ → 決定する → 選択完了（選び直し可）」の同じ流れ・同じ見た目にする。
+                // 夜アクションがある役職で候補がいる → 役職パネル、それ以外 → ダミー質問パネル
+                const nightKind = getMyNightKind();
+                let pickedName = null;
+
+                // ── リロード対策: 行動済みかどうかを復元 ──
+                // 役職パネルは Supabase の night_target_id、ダミー質問は sessionStorage から復元する
+                if (isMeAlive && nightKind !== 'dummy') {
                     try {
                         const { data: myData } = await supabaseClient
                             .from('players')
@@ -207,6 +283,8 @@ export async function updatePhaseDisplay(phase) {
                         if (myData && myData.night_target_id) {
                             // DBにnight_target_idが存在する → 今夜すでに行動済み
                             setHasActedTonight(true);
+                            const picked = getCurrentPlayers().find(p => p.id === myData.night_target_id);
+                            pickedName = picked ? picked.name : null;
                             console.log('[NIGHT] リロード検出: night_target_id あり → hasActedTonight = true');
                         } else {
                             // DBにnight_target_idがない → まだ未行動
@@ -217,85 +295,23 @@ export async function updatePhaseDisplay(phase) {
                         console.warn('[NIGHT] night_target_id の確認に失敗:', e);
                         setHasActedTonight(false);
                     }
+                } else if (isMeAlive) {
+                    const dummyState = getDummyNightState();
+                    setHasActedTonight(!!(dummyState && dummyState.answerId));
+                    pickedName = dummyState ? dummyState.answerName : null;
                 } else {
-                    // 夜行動役職でない場合はリセット不要（待機のまま）
                     setHasActedTonight(false);
                 }
 
                 if (isMeAlive) {
                     document.getElementById('night-action-overlay').classList.remove('hidden');
+                    NIGHT_PANEL_IDS.forEach(id => document.getElementById(id).classList.add('hidden'));
 
-                    if (getMyRoleName() === '人狼' && !getHasActedTonight()) {
-                        document.getElementById('night-wolf').classList.remove('hidden');
-                        document.getElementById('night-seer').classList.add('hidden');
-                        document.getElementById('night-medium').classList.add('hidden');
-                        document.getElementById('night-knight').classList.add('hidden');
-                        document.getElementById('night-waiting').classList.add('hidden');
-                        window.renderWolfTargets();
-                    } else if (getMyRoleName() === '預言者' && !getHasActedTonight()) {
-                        // ── 占い師の夜アクション ──
-                        document.getElementById('night-wolf').classList.add('hidden');
-                        document.getElementById('night-medium').classList.add('hidden');
-                        document.getElementById('night-knight').classList.add('hidden');
-                        document.getElementById('night-waiting').classList.add('hidden');
-                        document.getElementById('night-seer').classList.remove('hidden');
-                        window.renderSeerTargets();
-                    } else if (getMyRoleName() === '霊媒師' && !getHasActedTonight()) {
-                        // ── 霊媒師の夜アクション ──
-                        document.getElementById('night-wolf').classList.add('hidden');
-                        document.getElementById('night-seer').classList.add('hidden');
-                        document.getElementById('night-knight').classList.add('hidden');
-                        document.getElementById('night-waiting').classList.add('hidden');
-                        document.getElementById('night-medium').classList.remove('hidden');
-                        window.renderMediumTargets();
-                    } else if (getMyRoleName() === '騎士' && !getHasActedTonight()) {
-                        // ── 騎士の夜アクション ──
-                        document.getElementById('night-wolf').classList.add('hidden');
-                        document.getElementById('night-seer').classList.add('hidden');
-                        document.getElementById('night-medium').classList.add('hidden');
-                        document.getElementById('night-waiting').classList.add('hidden');
-                        document.getElementById('night-knight').classList.remove('hidden');
-                        window.renderKnightTargets();
+                    if (getHasActedTonight()) {
+                        renderNightDone(nightKind, pickedName);
                     } else {
-                        document.getElementById('night-wolf').classList.add('hidden');
-                        document.getElementById('night-seer').classList.add('hidden');
-                        document.getElementById('night-medium').classList.add('hidden');
-                        document.getElementById('night-knight').classList.add('hidden');
-                        document.getElementById('night-waiting').classList.remove('hidden');
-                        if (getHasActedTonight()) {
-                            if (getMyRoleName() === '人狼') {
-                                document.getElementById('night-waiting').innerHTML = `
-                                    <h2>襲撃完了</h2><p style="color:#c0caf5;">今夜の任務を終えました。<br>静かに朝を待ちましょう…</p>
-                                `;
-                            } else if (getMyRoleName() === '預言者') {
-                                document.getElementById('night-waiting').innerHTML = `
-                                    <h2>🔮 占い完了</h2><p style="color:#c0caf5;">占い完了。朝を待っています...</p>
-                                `;
-                            } else if (getMyRoleName() === '霊媒師') {
-                                document.getElementById('night-waiting').innerHTML = `
-                                    <h2>🔮 霊媒完了</h2><p style="color:#c0caf5;">霊媒完了。朝を待っています...</p>
-                                `;
-                            } else if (getMyRoleName() === '騎士') {
-                                document.getElementById('night-waiting').innerHTML = `
-                                    <h2>🛡️ 守護完了</h2><p style="color:#c0caf5;">守護完了。朝を待っています...</p>
-                                `;
-                            } else {
-                                document.getElementById('night-waiting').innerHTML = `
-                                    <h2>夜が訪れました</h2><p style="color:#c0caf5;">人狼が暗躍しています。<br>静かに朝を待ちましょう…</p>
-                                `;
-                            }
-                        } else {
-                            if (getMyRoleName() === 'てるてる') {
-                                document.getElementById('night-waiting').innerHTML = `
-                                    <h2>夜が訪れました</h2>
-                                    <p style="color:#c0caf5;">あなたは <span style="color:#ffc777; font-weight:bold;">てるてる</span> です。夜のアクションはありません。<br>昼の投票で追放されるよう、静かに朝を待ちましょう…</p>
-                                `;
-                            } else {
-                                document.getElementById('night-waiting').innerHTML = `
-                                    <h2>夜が訪れました</h2><p style="color:#c0caf5;">人狼が暗躍しています。<br>静かに朝を待ちましょう…</p>
-                                `;
-                            }
-                        }
+                        document.getElementById(`night-${nightKind}`).classList.remove('hidden');
+                        window[NIGHT_RENDER_FUNCS[nightKind]]();
                     }
                 } else {
                     document.getElementById('night-action-overlay').classList.add('hidden');
@@ -586,13 +602,13 @@ function renderGhostViewFor(playerName) {
         });
 
         // 対象プレイヤーの役職に応じたUIパネルを選択し、内容を書き換えて表示
-        const NIGHT_ACTION_ROLES = {
+        const NIGHT_PANEL_BY_ROLE = {
             '人狼': 'night-wolf',
             '預言者': 'night-seer',
             '霊媒師': 'night-medium',
             '騎士': 'night-knight'
         };
-        const panelId = NIGHT_ACTION_ROLES[target.role] || 'night-waiting';
+        const panelId = NIGHT_PANEL_BY_ROLE[target.role] || 'night-waiting';
         const panel = document.getElementById(panelId);
 
         if (panel) {
@@ -1414,7 +1430,6 @@ export async function showMediumResult() {
 // GM用夜フェーズ行動状況インジケーター
 // =============================================
 export function renderNightActionStatus() {
-    const NIGHT_ACTION_ROLES = ['人狼', '預言者', '霊媒師', '騎士'];
     const statusEl = document.getElementById('night-action-status');
     if (!statusEl) return;
 

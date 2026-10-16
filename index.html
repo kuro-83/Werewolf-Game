@@ -164,51 +164,57 @@
             </main>
 
             <!-- 夜フェーズ（生存者）UI -->
+            <!-- 役職がわからないよう、全パネルの見た目・操作手順をそろえている（違うのは質問文だけ） -->
             <div id="night-action-overlay" class="night-action-container hidden">
-                <!-- 人狼以外の待機画面 -->
-                <div id="night-waiting" class="night-content hidden">
-                    <h2>夜が訪れました</h2>
-                    <p style="color:#c0caf5;">人狼が暗躍しています。<br>静かに朝を待ちましょう…</p>
+                <!-- 選択完了画面（全員共通。中身は JS で書き換える） -->
+                <div id="night-waiting" class="night-content night-panel hidden">
+                    <h2 class="night-panel-title">✅ 選択完了</h2>
+                    <p class="night-question">朝を待っています…</p>
                 </div>
 
                 <!-- 人狼用の襲撃画面 -->
-                <div id="night-wolf" class="night-content hidden">
-                    <h2 style="color: #f7768e;">襲撃ターゲット選択</h2>
-                    <p style="color:#c0caf5;">今夜、誰を襲撃しますか？</p>
+                <div id="night-wolf" class="night-content night-panel hidden">
+                    <h2 class="night-panel-title">🌙 今夜の選択</h2>
+                    <p class="night-question">今夜、誰を襲撃しますか？</p>
                     <div id="wolf-target-list" class="target-list"></div>
-                    <button type="button" id="btn-wolf-attack" class="target-btn"
-                        style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#f7768e,#ff9e64); display:none;"
-                        onclick="submitAttack()">🔪 襲撃する</button>
+                    <button type="button" id="btn-wolf-attack" class="target-btn night-decide-btn" style="display:none;"
+                        onclick="submitAttack()">決定する</button>
                 </div>
 
-                <!-- 占い師用の占い画面 -->
-                <div id="night-seer" class="night-content hidden">
-                    <h2 style="color: #bb9af7;">🔮 占いターゲット選択</h2>
-                    <p style="color:#c0caf5;">今夜、誰を占いますか？</p>
+                <!-- 預言者用の占い画面 -->
+                <div id="night-seer" class="night-content night-panel hidden">
+                    <h2 class="night-panel-title">🌙 今夜の選択</h2>
+                    <p class="night-question">今夜、誰を占いますか？</p>
                     <div id="seer-target-list" class="target-list"></div>
-                    <button type="button" id="btn-seer-divinate" class="target-btn"
-                        style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#bb9af7,#7aa2f7); display:none;"
-                        onclick="submitDivination()">🔮 占う</button>
+                    <button type="button" id="btn-seer-divinate" class="target-btn night-decide-btn" style="display:none;"
+                        onclick="submitDivination()">決定する</button>
                 </div>
 
                 <!-- 霊媒師用の霊媒画面 -->
-                <div id="night-medium" class="night-content hidden">
-                    <h2 style="color: #73daca;">🔮 霊媒ターゲット選択</h2>
-                    <p style="color:#c0caf5;">今夜、誰を霊媒しますか？（死亡者から選択）</p>
+                <div id="night-medium" class="night-content night-panel hidden">
+                    <h2 class="night-panel-title">🌙 今夜の選択</h2>
+                    <p class="night-question">今夜、誰を霊媒しますか？</p>
                     <div id="medium-target-list" class="target-list"></div>
-                    <button type="button" id="btn-medium-action" class="target-btn"
-                        style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#73daca,#2ac3de); display:none;"
-                        onclick="submitMedium()">🔮 霊媒する</button>
+                    <button type="button" id="btn-medium-action" class="target-btn night-decide-btn" style="display:none;"
+                        onclick="submitMedium()">決定する</button>
                 </div>
 
                 <!-- 騎士用の守護画面 -->
-                <div id="night-knight" class="night-content hidden">
-                    <h2 style="color: #a78bfa;">🛡️ 守護ターゲット選択</h2>
-                    <p style="color:#c0caf5;">今夜、誰を守りますか？</p>
+                <div id="night-knight" class="night-content night-panel hidden">
+                    <h2 class="night-panel-title">🌙 今夜の選択</h2>
+                    <p class="night-question">今夜、誰を守りますか？</p>
                     <div id="knight-target-list" class="target-list"></div>
-                    <button type="button" id="btn-knight-action" class="target-btn"
-                        style="margin-top:1rem; width:100%; background: linear-gradient(135deg,#a78bfa,#7aa2f7); display:none;"
-                        onclick="submitKnightGuard()">🛡️ 守る</button>
+                    <button type="button" id="btn-knight-action" class="target-btn night-decide-btn" style="display:none;"
+                        onclick="submitKnightGuard()">決定する</button>
+                </div>
+
+                <!-- 夜アクションがない人用のダミー質問画面（質問文は JS で入れる） -->
+                <div id="night-dummy" class="night-content night-panel hidden">
+                    <h2 class="night-panel-title">🌙 今夜の選択</h2>
+                    <p id="dummy-question-text" class="night-question"></p>
+                    <div id="dummy-target-list" class="target-list"></div>
+                    <button type="button" id="btn-dummy-answer" class="target-btn night-decide-btn" style="display:none;"
+                        onclick="submitDummyAnswer()">決定する</button>
                 </div>
             </div>
         </div>

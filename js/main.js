@@ -2,7 +2,7 @@
 // js/main.js
 // エントリーポイント：Supabase Realtime購読 & window公開
 // =============================================
-console.log("【最新版 2026/10/16】人狼襲撃の多数決化・仲間の人狼を候補から除外・預言者/霊媒師の複数対応・部屋作成時の確認・名前のHTMLエスケープ 修正済み");
+console.log("【最新版 2026/10/16 v2】夜フェーズのダミー質問追加・夜の画面の見た目と操作手順を全役職で統一");
 
 import { supabaseClient } from './config.js';
 import {
@@ -48,6 +48,7 @@ import {
     renderMediumTargets, submitMedium,
     renderWolfTargets, submitAttack,
     renderKnightTargets, submitKnightGuard,
+    renderDummyTargets, submitDummyAnswer,
     killPlayer, kickPlayer,
     changeRoleCount,
     distributeRolesAndStartGame, handlePhaseChange, resetGame,
@@ -77,11 +78,13 @@ window.submitAttack = submitAttack;
 window.submitDivination = submitDivination;
 window.submitMedium = submitMedium;
 window.submitKnightGuard = submitKnightGuard;
+window.submitDummyAnswer = submitDummyAnswer;
 
 window.renderSeerTargets = renderSeerTargets;
 window.renderMediumTargets = renderMediumTargets;
 window.renderWolfTargets = renderWolfTargets;
 window.renderKnightTargets = renderKnightTargets;
+window.renderDummyTargets = renderDummyTargets;
 
 window.changeRoleCount = changeRoleCount;
 window.showRoleInfoModal = showRoleInfoModal;

@@ -3,7 +3,7 @@
 // 投票・夜アクション・GM操作・ゲーム進行処理
 // =============================================
 
-import { supabaseClient, GAME_TIMELINE, ROLES_INFO } from './config.js';
+import { supabaseClient, GAME_TIMELINE, ROLES_INFO, DUMMY_QUESTIONS } from './config.js';
 import {
     getMyPlayerName, getMyRoleType, getMyRoleName,
     getCurrentPlayers, setCurrentPlayers,
@@ -17,6 +17,7 @@ import {
     getCurrentTimelineIndex, setCurrentTimelineIndex,
     getPendingWinner, setPendingWinner,
     roleCounts, saveSession, clearSessionData,
+    getDummyNightState, saveDummyNightState,
     loginView, gameView, gmPanel, gmNameDisplay, nameInput
 } from './state.js';
 import {
@@ -26,7 +27,7 @@ import {
     updateWolfChatButtonVisibility, updateHideVoteDetailsUI,
     receiveChatMessage, receiveMissionUpdate,
     showSeerResult, showMediumResult,
-    escapeHTML
+    getNightCandidates, renderNightDone
 } from './ui.js';
 
 // =============================================
@@ -321,341 +322,181 @@ export async function triggerGameEnd(winner) {
 }
 
 // =============================================
-// 占い師（預言者）専用処理
+// 夜フェーズ：全員共通の選択処理
+// 役職がバレないよう、どの役職（ダミー質問を含む）も
+// 「名前を選ぶ → 決定する → 確認 → 選択完了（選び直し可）」の同じ手順・同じ文言にする
 // =============================================
-let selectedSeerTargetId = null;
-let selectedSeerTargetName = null;
+// パネル種別ごとの選択中の相手 { id, name }
+const nightSelections = {};
 
+/**
+ * 名前ボタンを並べ、タップで選択状態にして「決定する」ボタンを出す
+ * @param {'wolf'|'seer'|'medium'|'knight'|'dummy'} kind
+ */
+function renderNightChoices(kind, listId, btnId) {
+    const list = document.getElementById(listId);
+    list.innerHTML = '';
+    nightSelections[kind] = null;
+
+    const btn = document.getElementById(btnId);
+    if (btn) {
+        btn.style.display = 'none';
+        btn.disabled = false;
+    }
+
+    const targets = getNightCandidates(kind);
+
+    if (targets.length === 0) {
+        list.innerHTML = '<p style="color:#888;">選べるプレイヤーがいません</p>';
+        return;
+    }
+
+    targets.forEach(t => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'target-btn';
+        b.textContent = t.name;
+        b.dataset.id = t.id;
+        b.onclick = () => {
+            document.querySelectorAll(`#${listId} .target-btn`).forEach(x => x.classList.remove('selected'));
+            b.classList.add('selected');
+            nightSelections[kind] = { id: t.id, name: t.name };
+            if (btn) btn.style.display = '';
+        };
+        list.appendChild(b);
+    });
+}
+
+/**
+ * 「決定する」→ 確認 → 保存 → 共通の選択完了画面
+ * @param {Function} save - 選んだ相手を保存する処理（失敗時は throw）
+ */
+async function submitNightChoice(kind, panelId, btnId, save) {
+    const selected = nightSelections[kind];
+    if (!selected) {
+        alert('プレイヤーを選んでください');
+        return;
+    }
+    if (!confirm(`${selected.name}さんに決定しますか？`)) return;
+
+    const btn = document.getElementById(btnId);
+    if (btn) btn.disabled = true;
+
+    try {
+        await save(selected);
+        setHasActedTonight(true);
+        document.getElementById(panelId).classList.add('hidden');
+        renderNightDone(kind, selected.name);
+    } catch (err) {
+        console.error(`夜の選択の送信エラー (${kind}):`, err);
+        alert('送信に失敗しました。もう一度お試しください。');
+        if (btn) btn.disabled = false;
+    }
+}
+
+/** 役職アクションの対象を DB に保存する */
+async function saveNightTarget(selected) {
+    const { error } = await supabaseClient
+        .from('players')
+        .update({ night_target_id: selected.id })
+        .eq('name', getMyPlayerName());
+    if (error) throw error;
+}
+
+// ---- 預言者 ----
 export function renderSeerTargets() {
-    const list = document.getElementById('seer-target-list');
-    list.innerHTML = '';
-    selectedSeerTargetId = null;
-    selectedSeerTargetName = null;
-    const btn = document.getElementById('btn-seer-divinate');
-    btn.style.display = 'none';
-    btn.disabled = false;
-
-    const targets = getCurrentPlayers().filter(p => p.is_alive && p.name !== getMyPlayerName());
-
-    if (targets.length === 0) {
-        list.innerHTML = '<p style="color:#888;">占えるプレイヤーがいません</p>';
-        return;
-    }
-
-    targets.forEach(t => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'target-btn';
-        b.textContent = t.name;
-        b.dataset.id = t.id;
-        b.onclick = () => {
-            document.querySelectorAll('#seer-target-list .target-btn').forEach(x => x.classList.remove('selected'));
-            b.classList.add('selected');
-            selectedSeerTargetId = t.id;
-            selectedSeerTargetName = t.name;
-            btn.style.display = '';
-        };
-        list.appendChild(b);
-    });
+    renderNightChoices('seer', 'seer-target-list', 'btn-seer-divinate');
 }
 
-export async function submitDivination() {
-    if (!selectedSeerTargetId) {
-        alert('占うプレイヤーを選んでください');
-        return;
-    }
-    if (!confirm(`${selectedSeerTargetName} さんを占いますか？`)) return;
-
-    const btn = document.getElementById('btn-seer-divinate');
-    btn.disabled = true;
-
-    try {
-        const { error } = await supabaseClient
-            .from('players')
-            .update({ night_target_id: selectedSeerTargetId })
-            .eq('name', getMyPlayerName());
-
-        if (error) throw error;
-
-        setHasActedTonight(true);
-        // おわり：選び直し可能な完了画面へ
-        document.getElementById('night-seer').classList.add('hidden');
-        const nightWaiting = document.getElementById('night-waiting');
-        nightWaiting.classList.remove('hidden');
-        nightWaiting.innerHTML = `
-            <h2>🔮 占い完了</h2>
-            <p style="color:#c0caf5;">「${escapeHTML(selectedSeerTargetName)}」を占いました。朝を待っています...<br><span style="font-size:0.8rem;opacity:0.6;">展開変更する場合は下のボタンから</span></p>
-            <button type="button" class="change-night-target-btn" onclick="changeNightTarget('seer')">&#x21bb; 占い相手を選び直す</button>
-        `;
-    } catch (err) {
-        console.error('占いエラー:', err);
-        alert('占いの送信に失敗しました。');
-        btn.disabled = false;
-    }
+export function submitDivination() {
+    return submitNightChoice('seer', 'night-seer', 'btn-seer-divinate', saveNightTarget);
 }
 
-// =============================================
-// 霊媒師専用処理
-// =============================================
-let selectedMediumTargetId = null;
-let selectedMediumTargetName = null;
-
+// ---- 霊媒師 ----
 export function renderMediumTargets() {
-    const list = document.getElementById('medium-target-list');
-    list.innerHTML = '';
-    selectedMediumTargetId = null;
-    selectedMediumTargetName = null;
-    const btn = document.getElementById('btn-medium-action');
-    btn.style.display = 'none';
-    btn.disabled = false;
-
-    const targets = getCurrentPlayers().filter(p => !p.is_alive);
-
-    if (targets.length === 0) {
-        list.innerHTML = '<p style="color:#888;">霊媒できる死者がいません</p>';
-        return;
-    }
-
-    targets.forEach(t => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'target-btn';
-        b.textContent = t.name;
-        b.dataset.id = t.id;
-        b.onclick = () => {
-            document.querySelectorAll('#medium-target-list .target-btn').forEach(x => x.classList.remove('selected'));
-            b.classList.add('selected');
-            selectedMediumTargetId = t.id;
-            selectedMediumTargetName = t.name;
-            btn.style.display = '';
-        };
-        list.appendChild(b);
-    });
+    renderNightChoices('medium', 'medium-target-list', 'btn-medium-action');
 }
 
-export async function submitMedium() {
-    if (!selectedMediumTargetId) {
-        alert('霊媒するプレイヤーを選んでください');
-        return;
-    }
-    if (!confirm(`${selectedMediumTargetName} さんを霊媒しますか？`)) return;
-
-    const btn = document.getElementById('btn-medium-action');
-    btn.disabled = true;
-
-    try {
-        const { error } = await supabaseClient
-            .from('players')
-            .update({ night_target_id: selectedMediumTargetId })
-            .eq('name', getMyPlayerName());
-
-        if (error) throw error;
-
-        setHasActedTonight(true);
-        // おわり：選び直し可能な完了画面へ
-        document.getElementById('night-medium').classList.add('hidden');
-        const nightWaiting = document.getElementById('night-waiting');
-        nightWaiting.classList.remove('hidden');
-        nightWaiting.innerHTML = `
-            <h2>🔮 霊媒完了</h2>
-            <p style="color:#c0caf5;">「${escapeHTML(selectedMediumTargetName)}」を霊媒しました。朝を待っています...<br><span style="font-size:0.8rem;opacity:0.6;">展開変更する場合は下のボタンから</span></p>
-            <button type="button" class="change-night-target-btn" onclick="changeNightTarget('medium')">&#x21bb; 霊媒相手を選び直す</button>
-        `;
-    } catch (err) {
-        console.error('霊媒エラー:', err);
-        alert('霊媒の送信に失敗しました。');
-        btn.disabled = false;
-    }
+export function submitMedium() {
+    return submitNightChoice('medium', 'night-medium', 'btn-medium-action', saveNightTarget);
 }
 
-// =============================================
-// 人狼専用処理
-// =============================================
-let selectedWolfTargetId = null;
-let selectedWolfTargetName = null;
-
+// ---- 人狼 ----
 export function renderWolfTargets() {
-    const list = document.getElementById('wolf-target-list');
-    list.innerHTML = '';
-    selectedWolfTargetId = null;
-    selectedWolfTargetName = null;
-
-    const btn = document.getElementById('btn-wolf-attack');
-    if (btn) {
-        btn.style.display = 'none';
-        btn.disabled = false;
-    }
-
-    // 自分を含む人狼全員は襲撃候補から除外
-    const targets = getCurrentPlayers().filter(p => p.is_alive && p.name !== getMyPlayerName() && p.role !== '人狼');
-
-    if (targets.length === 0) {
-        list.innerHTML = '<p style="color:#888;">襲撃できるプレイヤーがいません</p>';
-        return;
-    }
-
-    targets.forEach(t => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'target-btn';
-        b.textContent = t.name;
-        b.dataset.id = t.id;
-        b.onclick = () => {
-            document.querySelectorAll('#wolf-target-list .target-btn').forEach(x => x.classList.remove('selected'));
-            b.classList.add('selected');
-            selectedWolfTargetId = t.id;
-            selectedWolfTargetName = t.name;
-            if (btn) btn.style.display = '';
-        };
-        list.appendChild(b);
-    });
+    renderNightChoices('wolf', 'wolf-target-list', 'btn-wolf-attack');
 }
 
-export async function submitAttack() {
-    if (!selectedWolfTargetId) {
-        alert('襲撃するプレイヤーを選んでください');
-        return;
-    }
-    if (!confirm(`${selectedWolfTargetName} さんを襲撃しますか？`)) return;
-
-    const btn = document.getElementById('btn-wolf-attack');
-    if (btn) btn.disabled = true;
-
-    try {
-        const { error } = await supabaseClient
-            .from('players')
-            .update({ night_target_id: selectedWolfTargetId })
-            .eq('name', getMyPlayerName());
-
-        if (error) throw error;
-
-        setHasActedTonight(true);
-        // おわり：選び直し可能な完了画面へ
-        document.getElementById('night-wolf').classList.add('hidden');
-        const nightWaiting = document.getElementById('night-waiting');
-        nightWaiting.classList.remove('hidden');
-        nightWaiting.innerHTML = `
-            <h2>🔪 襲撃完了（変更可）</h2>
-            <p style="color:#c0caf5;">「${escapeHTML(selectedWolfTargetName)}」を襲撃対象に設定しました。<br><span style="font-size:0.8rem;opacity:0.6;">夜明けまで変更可能です</span></p>
-            <button type="button" class="change-night-target-btn" onclick="changeNightTarget('wolf')">&#x21bb; 襲撃対象を選び直す</button>
-        `;
-    } catch (err) {
-        console.error('襲撃送信エラー:', err);
-        alert('襲撃の送信に失敗しました。');
-        if (btn) btn.disabled = false;
-    }
+export function submitAttack() {
+    return submitNightChoice('wolf', 'night-wolf', 'btn-wolf-attack', saveNightTarget);
 }
 
-// =============================================
-// 騎士専用処理
-// =============================================
-let selectedKnightTargetId = null;
-let selectedKnightTargetName = null;
-
+// ---- 騎士 ----
 export function renderKnightTargets() {
-    const list = document.getElementById('knight-target-list');
-    list.innerHTML = '';
-    selectedKnightTargetId = null;
-    selectedKnightTargetName = null;
-
-    const btn = document.getElementById('btn-knight-action');
-    if (btn) {
-        btn.style.display = 'none';
-        btn.disabled = false;
-    }
-
-    const targets = getCurrentPlayers().filter(p => p.is_alive);
-
-    if (targets.length === 0) {
-        list.innerHTML = '<p style="color:#888;">守護できるプレイヤーがいません</p>';
-        return;
-    }
-
-    targets.forEach(t => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'target-btn';
-        b.textContent = t.name;
-        b.dataset.id = t.id;
-        b.onclick = () => {
-            document.querySelectorAll('#knight-target-list .target-btn').forEach(x => x.classList.remove('selected'));
-            b.classList.add('selected');
-            selectedKnightTargetId = t.id;
-            selectedKnightTargetName = t.name;
-            if (btn) btn.style.display = '';
-        };
-        list.appendChild(b);
-    });
+    renderNightChoices('knight', 'knight-target-list', 'btn-knight-action');
 }
 
-export async function submitKnightGuard() {
-    if (!selectedKnightTargetId) {
-        alert('守護するプレイヤーを選んでください');
-        return;
+export function submitKnightGuard() {
+    return submitNightChoice('knight', 'night-knight', 'btn-knight-action', saveNightTarget);
+}
+
+// ---- ダミー質問（夜アクションがない人） ----
+export function renderDummyTargets() {
+    // 同じ夜はリロードしても同じ質問になるよう、選んだ質問番号を sessionStorage に残す
+    let st = getDummyNightState();
+    if (!st) {
+        st = {
+            night: getCurrentTimelineIndex(),
+            name: getMyPlayerName(),
+            q: Math.floor(Math.random() * DUMMY_QUESTIONS.length),
+            answerId: null,
+            answerName: null
+        };
+        saveDummyNightState(st);
     }
-    if (!confirm(`${selectedKnightTargetName} さんを守護しますか？`)) return;
+    document.getElementById('dummy-question-text').textContent = DUMMY_QUESTIONS[st.q] || DUMMY_QUESTIONS[0];
+    renderNightChoices('dummy', 'dummy-target-list', 'btn-dummy-answer');
+}
 
-    const btn = document.getElementById('btn-knight-action');
-    if (btn) btn.disabled = true;
-
-    try {
-        const { error } = await supabaseClient
-            .from('players')
-            .update({ night_target_id: selectedKnightTargetId })
-            .eq('name', getMyPlayerName());
-
-        if (error) throw error;
-
-        setHasActedTonight(true);
-        // おわり：選び直し可能な完了画面へ
-        document.getElementById('night-knight').classList.add('hidden');
-        const nightWaiting = document.getElementById('night-waiting');
-        nightWaiting.classList.remove('hidden');
-        nightWaiting.innerHTML = `
-            <h2>🛡️ 守護完了（変更可）</h2>
-            <p style="color:#c0caf5;">「${escapeHTML(selectedKnightTargetName)}」を守護対象に設定しました。<br><span style="font-size:0.8rem;opacity:0.6;">夜明けまで変更可能です</span></p>
-            <button type="button" class="change-night-target-btn" onclick="changeNightTarget('knight')">&#x21bb; 守護対象を選び直す</button>
-        `;
-    } catch (err) {
-        console.error('守護送信エラー:', err);
-        alert('守護の送信に失敗しました。');
-        if (btn) btn.disabled = false;
-    }
+export function submitDummyAnswer() {
+    return submitNightChoice('dummy', 'night-dummy', 'btn-dummy-answer', async (selected) => {
+        // 回答は DB に保存しない（完了画面の表示と選び直しのため、この端末にだけ残す）
+        const st = getDummyNightState() || { night: getCurrentTimelineIndex(), name: getMyPlayerName(), q: 0 };
+        saveDummyNightState({ ...st, answerId: selected.id, answerName: selected.name });
+    });
 }
 
 // =============================================
 // 夜フェーズ：行動選び直し
 // =============================================
+const NIGHT_PANELS = {
+    wolf: { panelId: 'night-wolf', render: renderWolfTargets },
+    seer: { panelId: 'night-seer', render: renderSeerTargets },
+    medium: { panelId: 'night-medium', render: renderMediumTargets },
+    knight: { panelId: 'night-knight', render: renderKnightTargets },
+    dummy: { panelId: 'night-dummy', render: renderDummyTargets }
+};
+
 /**
  * 夜フェーズ中に行動を選び直す（送信済みでもターゲットを再選択できる）
- * @param {'wolf'|'seer'|'medium'|'knight'} role - 役職種別
+ * @param {'wolf'|'seer'|'medium'|'knight'|'dummy'} kind - パネル種別
  */
-export function changeNightTarget(role) {
+export function changeNightTarget(kind) {
     if (getLastKnownPhase() !== 'night') return;
+    const entry = NIGHT_PANELS[kind];
+    if (!entry) return;
 
-    // 待檟画面を隐して行動選択画面を再表示
+    // 死亡後（幽霊モード）に古い「選び直す」ボタンが残っていても何もしない
+    const me = getCurrentPlayers().find(p => p.name === getMyPlayerName());
+    if (!me || !me.is_alive) return;
+
+    // 完了画面を隠して選択画面を再表示
     document.getElementById('night-waiting').classList.add('hidden');
 
     // hasActedTonightをリセット（選び直し中は未行動扱い）
     setHasActedTonight(false);
 
-    if (role === 'wolf') {
-        const panel = document.getElementById('night-wolf');
-        panel.classList.remove('hidden');
-        window.renderWolfTargets();
-    } else if (role === 'seer') {
-        const panel = document.getElementById('night-seer');
-        panel.classList.remove('hidden');
-        window.renderSeerTargets();
-    } else if (role === 'medium') {
-        const panel = document.getElementById('night-medium');
-        panel.classList.remove('hidden');
-        window.renderMediumTargets();
-    } else if (role === 'knight') {
-        const panel = document.getElementById('night-knight');
-        panel.classList.remove('hidden');
-        window.renderKnightTargets();
-    }
+    document.getElementById(entry.panelId).classList.remove('hidden');
+    entry.render();
 }
 
 // =============================================

@@ -2545,6 +2545,43 @@ body.ghost-camera-active #ghost-mode-overlay {
 }
 
 /* =============================================
+   🌙 夜フェーズ：全員共通の選択パネル
+   役職が周りにバレないよう、見出し・色・ボタンは全パネルで同じにする
+   ============================================= */
+.night-panel {
+    border-color: rgba(122, 162, 247, 0.3);
+}
+
+.night-panel .night-panel-title {
+    color: #c0caf5;
+}
+
+.night-panel .night-question {
+    color: #c0caf5;
+    min-height: 1.5em;
+}
+
+.night-panel .night-picked {
+    color: rgba(192, 202, 245, 0.6);
+    font-size: 0.8rem;
+    margin-top: 0.4rem;
+}
+
+.night-decide-btn,
+.night-decide-btn:hover {
+    margin-top: 1rem;
+    width: 100%;
+    background: linear-gradient(135deg, #7aa2f7, #bb9af7);
+    border-color: transparent;
+    color: #fff;
+}
+
+.night-decide-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* =============================================
    ↻ 夜フェーズ：選び直しボタン
    ============================================= */
 .change-night-target-btn {
