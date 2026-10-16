@@ -2567,6 +2567,12 @@ body.ghost-camera-active #ghost-mode-overlay {
     margin-top: 0.4rem;
 }
 
+/* 死者の名前ボタン（全員の画面で同じ見た目） */
+.night-panel .target-btn.night-dead {
+    opacity: 0.45;
+    text-decoration: line-through;
+}
+
 .night-decide-btn,
 .night-decide-btn:hover {
     margin-top: 1rem;

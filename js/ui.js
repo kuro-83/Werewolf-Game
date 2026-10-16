@@ -44,25 +44,29 @@ const NIGHT_RENDER_FUNCS = {
 };
 
 /**
- * 夜の選択肢（全員同じ並び順になるよう名前順に並べる）
+ * その役職がこのプレイヤーを選べるか
  * @param {'wolf'|'seer'|'medium'|'knight'|'dummy'} kind
  */
-export function getNightCandidates(kind) {
+function canPickAtNight(kind, p) {
+    if (kind === 'medium') return !p.is_alive;          // 霊媒師は死者だけ
+    if (kind === 'wolf') return p.is_alive && p.role !== '人狼'; // 人狼は仲間の人狼を襲撃できない
+    return p.is_alive;                                   // 預言者・騎士・ダミー質問は生存者だけ
+}
+
+/**
+ * 夜の選択肢（役職に関係なく全員同じリスト）
+ * 役職がバレないよう、自分以外の全員を「生存者（名前順）→ 死者（名前順）」で並べ、
+ * ボタンの個数・並び順を全員そろえる。選べない人は selectable: false（押したときに案内を出す）
+ * @param {'wolf'|'seer'|'medium'|'knight'|'dummy'} kind
+ * @returns {{ player: object, selectable: boolean }[]}
+ */
+export function getNightChoices(kind) {
     const me = getMyPlayerName();
-    const players = getCurrentPlayers();
-    let list;
-    if (kind === 'medium') {
-        list = players.filter(p => !p.is_alive);
-    } else if (kind === 'knight') {
-        list = players.filter(p => p.is_alive);
-    } else if (kind === 'wolf') {
-        // 自分を含む人狼全員は襲撃候補から除外
-        list = players.filter(p => p.is_alive && p.name !== me && p.role !== '人狼');
-    } else {
-        // 預言者・ダミー質問：自分以外の生存者
-        list = players.filter(p => p.is_alive && p.name !== me);
-    }
-    return [...list].sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+    const byName = (a, b) => a.name.localeCompare(b.name, 'ja');
+    const others = getCurrentPlayers().filter(p => p.name !== me);
+    const alive = others.filter(p => p.is_alive).sort(byName);
+    const dead = others.filter(p => !p.is_alive).sort(byName);
+    return [...alive, ...dead].map(p => ({ player: p, selectable: canPickAtNight(kind, p) }));
 }
 
 /** 今夜、自分にどのパネルを出すか */
@@ -70,7 +74,7 @@ export function getMyNightKind() {
     const role = getMyRoleName();
     const kind = NIGHT_ACTION_ROLES.includes(role) ? NIGHT_KIND_BY_ROLE[role] : null;
     // 夜アクションがない役職、または選べる相手がいない（死者のいない夜の霊媒師など）→ ダミー質問
-    if (!kind || getNightCandidates(kind).length === 0) return 'dummy';
+    if (!kind || !getNightChoices(kind).some(c => c.selectable)) return 'dummy';
     return kind;
 }
 
@@ -629,7 +633,6 @@ function renderGhostViewFor(playerName) {
                     // 実際の候補リスト（action.js の render〇〇Targets）と同じ条件にそろえる
                     const candidates = getCurrentPlayers().filter(p => {
                         if (panelId === 'night-medium') return !p.is_alive;
-                        if (panelId === 'night-knight') return p.is_alive;
                         if (panelId === 'night-wolf') return p.is_alive && p.name !== target.name && p.role !== '人狼';
                         return p.is_alive && p.name !== target.name;
                     });

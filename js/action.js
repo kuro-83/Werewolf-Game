@@ -27,7 +27,7 @@ import {
     updateWolfChatButtonVisibility, updateHideVoteDetailsUI,
     receiveChatMessage, receiveMissionUpdate,
     showSeerResult, showMediumResult,
-    getNightCandidates, renderNightDone
+    getNightChoices, renderNightDone
 } from './ui.js';
 
 // =============================================
@@ -344,20 +344,26 @@ function renderNightChoices(kind, listId, btnId) {
         btn.disabled = false;
     }
 
-    const targets = getNightCandidates(kind);
+    const choices = getNightChoices(kind);
 
-    if (targets.length === 0) {
+    if (choices.length === 0) {
         list.innerHTML = '<p style="color:#888;">選べるプレイヤーがいません</p>';
         return;
     }
 
-    targets.forEach(t => {
+    choices.forEach(({ player: t, selectable }) => {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'target-btn';
+        // 死者は全員の画面で同じように薄く表示する（役職による見た目の違いは出さない）
+        b.className = t.is_alive ? 'target-btn' : 'target-btn night-dead';
         b.textContent = t.name;
         b.dataset.id = t.id;
         b.onclick = () => {
+            if (!selectable) {
+                // 選べない人（仲間の人狼・死者など）は押したときに初めて案内する。文言は全役職共通
+                alert('この人は選べません。別の人を選んでください。');
+                return;
+            }
             document.querySelectorAll(`#${listId} .target-btn`).forEach(x => x.classList.remove('selected'));
             b.classList.add('selected');
             nightSelections[kind] = { id: t.id, name: t.name };
