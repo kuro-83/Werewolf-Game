@@ -25,7 +25,8 @@ import {
     updateGmTimelineButtons, initRoleCounters,
     updateWolfChatButtonVisibility, updateHideVoteDetailsUI,
     receiveChatMessage, receiveMissionUpdate,
-    showSeerResult, showMediumResult
+    showSeerResult, showMediumResult,
+    escapeHTML
 } from './ui.js';
 
 // =============================================
@@ -383,7 +384,7 @@ export async function submitDivination() {
         nightWaiting.classList.remove('hidden');
         nightWaiting.innerHTML = `
             <h2>🔮 占い完了</h2>
-            <p style="color:#c0caf5;">「${selectedSeerTargetName}」を占いました。朝を待っています...<br><span style="font-size:0.8rem;opacity:0.6;">展開変更する場合は下のボタンから</span></p>
+            <p style="color:#c0caf5;">「${escapeHTML(selectedSeerTargetName)}」を占いました。朝を待っています...<br><span style="font-size:0.8rem;opacity:0.6;">展開変更する場合は下のボタンから</span></p>
             <button type="button" class="change-night-target-btn" onclick="changeNightTarget('seer')">&#x21bb; 占い相手を選び直す</button>
         `;
     } catch (err) {
@@ -457,7 +458,7 @@ export async function submitMedium() {
         nightWaiting.classList.remove('hidden');
         nightWaiting.innerHTML = `
             <h2>🔮 霊媒完了</h2>
-            <p style="color:#c0caf5;">「${selectedMediumTargetName}」を霊媒しました。朝を待っています...<br><span style="font-size:0.8rem;opacity:0.6;">展開変更する場合は下のボタンから</span></p>
+            <p style="color:#c0caf5;">「${escapeHTML(selectedMediumTargetName)}」を霊媒しました。朝を待っています...<br><span style="font-size:0.8rem;opacity:0.6;">展開変更する場合は下のボタンから</span></p>
             <button type="button" class="change-night-target-btn" onclick="changeNightTarget('medium')">&#x21bb; 霊媒相手を選び直す</button>
         `;
     } catch (err) {
@@ -485,7 +486,8 @@ export function renderWolfTargets() {
         btn.disabled = false;
     }
 
-    const targets = getCurrentPlayers().filter(p => p.is_alive && p.name !== getMyPlayerName());
+    // 自分を含む人狼全員は襲撃候補から除外
+    const targets = getCurrentPlayers().filter(p => p.is_alive && p.name !== getMyPlayerName() && p.role !== '人狼');
 
     if (targets.length === 0) {
         list.innerHTML = '<p style="color:#888;">襲撃できるプレイヤーがいません</p>';
@@ -534,7 +536,7 @@ export async function submitAttack() {
         nightWaiting.classList.remove('hidden');
         nightWaiting.innerHTML = `
             <h2>🔪 襲撃完了（変更可）</h2>
-            <p style="color:#c0caf5;">「${selectedWolfTargetName}」を襲撃対象に設定しました。<br><span style="font-size:0.8rem;opacity:0.6;">夜明けまで変更可能です</span></p>
+            <p style="color:#c0caf5;">「${escapeHTML(selectedWolfTargetName)}」を襲撃対象に設定しました。<br><span style="font-size:0.8rem;opacity:0.6;">夜明けまで変更可能です</span></p>
             <button type="button" class="change-night-target-btn" onclick="changeNightTarget('wolf')">&#x21bb; 襲撃対象を選び直す</button>
         `;
     } catch (err) {
@@ -611,7 +613,7 @@ export async function submitKnightGuard() {
         nightWaiting.classList.remove('hidden');
         nightWaiting.innerHTML = `
             <h2>🛡️ 守護完了（変更可）</h2>
-            <p style="color:#c0caf5;">「${selectedKnightTargetName}」を守護対象に設定しました。<br><span style="font-size:0.8rem;opacity:0.6;">夜明けまで変更可能です</span></p>
+            <p style="color:#c0caf5;">「${escapeHTML(selectedKnightTargetName)}」を守護対象に設定しました。<br><span style="font-size:0.8rem;opacity:0.6;">夜明けまで変更可能です</span></p>
             <button type="button" class="change-night-target-btn" onclick="changeNightTarget('knight')">&#x21bb; 守護対象を選び直す</button>
         `;
     } catch (err) {
@@ -761,6 +763,67 @@ export async function distributeRolesAndStartGame() {
     }
 }
 
+/**
+ * 人狼の襲撃先を多数決で1人に決める
+ * 最多票が同数ならその中からランダム、誰も選んでいなければ null（襲撃なし）
+ * @param {string[]} targetIds - 生存人狼それぞれの night_target_id
+ * @returns {string|null}
+ */
+export function decideWolfVictim(targetIds) {
+    const counts = {};
+    targetIds.forEach(id => { counts[id] = (counts[id] || 0) + 1; });
+    const ids = Object.keys(counts);
+    if (ids.length === 0) return null;
+
+    const maxVotes = Math.max(...Object.values(counts));
+    const topIds = ids.filter(id => counts[id] === maxVotes);
+    return topIds[Math.floor(Math.random() * topIds.length)];
+}
+
+/**
+ * 占い・霊媒の結果を集計して night_result に書き込む
+ * 同じ役職が複数いる場合も、生存者全員それぞれの対象について処理する
+ * @param {'預言者'|'霊媒師'} roleName
+ * @param {string} logTag - ログ用のタグ
+ */
+async function applyInspectionResults(roleName, logTag) {
+    try {
+        const { data: actors, error: actorsErr } = await supabaseClient
+            .from('players')
+            .select('id, name, night_target_id')
+            .eq('role', roleName)
+            .eq('is_alive', true);
+
+        if (actorsErr) throw actorsErr;
+
+        for (const actor of (actors || [])) {
+            if (!actor.night_target_id) continue;
+            try {
+                const { data: targetData, error: targetErr } = await supabaseClient
+                    .from('players')
+                    .select('role')
+                    .eq('id', actor.night_target_id)
+                    .maybeSingle();
+
+                if (targetErr) throw targetErr;
+                if (!targetData) continue;
+
+                const result = targetData.role === '人狼' ? '人狼' : '人間';
+                const { error: updateErr } = await supabaseClient
+                    .from('players')
+                    .update({ night_result: result })
+                    .eq('id', actor.id);
+                if (updateErr) throw updateErr;
+                console.log(`[${logTag}] handlePhaseChange ${actor.name} の結果: ${result}`);
+            } catch (actorErr) {
+                console.warn(`[${logTag}] handlePhaseChange ${actor.name} の集計スキップ:`, actorErr);
+            }
+        }
+    } catch (err) {
+        console.warn(`[${logTag}] handlePhaseChange ${roleName}の集計スキップ:`, err);
+    }
+}
+
 export async function handlePhaseChange(newPhase, newTimelineIndex = null) {
     if (getLastKnownPhase() === 'waiting' && newPhase !== 'waiting') {
         const isSuccess = await distributeRolesAndStartGame();
@@ -773,62 +836,9 @@ export async function handlePhaseChange(newPhase, newTimelineIndex = null) {
     }
     // 夜フェーズから朝フェーズ（morning）または議論フェーズ（discussion）へ移行する場合：占い師・霊媒師の結果を集計、および人狼の襲撃集計
     if (getLastKnownPhase() === 'night' && (newPhase === 'morning' || newPhase === 'discussion')) {
-        // 占い師の集計
-        try {
-            const { data: seerData, error: seerErr } = await supabaseClient
-                .from('players')
-                .select('id, name, night_target_id')
-                .eq('role', '預言者')
-                .eq('is_alive', true)
-                .maybeSingle();
-
-            if (!seerErr && seerData && seerData.night_target_id) {
-                const { data: targetData, error: targetErr } = await supabaseClient
-                    .from('players')
-                    .select('role')
-                    .eq('id', seerData.night_target_id)
-                    .maybeSingle();
-
-                if (!targetErr && targetData) {
-                    const result = targetData.role === '人狼' ? '人狼' : '人間';
-                    await supabaseClient
-                        .from('players')
-                        .update({ night_result: result })
-                        .eq('id', seerData.id);
-                    console.log(`[SEER] handlePhaseChange 占い結果: ${result}`);
-                }
-            }
-        } catch (seerErr) {
-            console.warn('[SEER] handlePhaseChange 占い集計スキップ:', seerErr);
-        }
-        // 霊媒師の集計
-        try {
-            const { data: mediumData, error: mediumErr } = await supabaseClient
-                .from('players')
-                .select('id, name, night_target_id')
-                .eq('role', '霊媒師')
-                .eq('is_alive', true)
-                .maybeSingle();
-
-            if (!mediumErr && mediumData && mediumData.night_target_id) {
-                const { data: targetData, error: targetErr } = await supabaseClient
-                    .from('players')
-                    .select('role')
-                    .eq('id', mediumData.night_target_id)
-                    .maybeSingle();
-
-                if (!targetErr && targetData) {
-                    const result = targetData.role === '人狼' ? '人狼' : '人間';
-                    await supabaseClient
-                        .from('players')
-                        .update({ night_result: result })
-                        .eq('id', mediumData.id);
-                    console.log(`[MEDIUM] handlePhaseChange 霊媒結果: ${result}`);
-                }
-            }
-        } catch (mediumErr) {
-            console.warn('[MEDIUM] handlePhaseChange 霊媒集計スキップ:', mediumErr);
-        }
+        // 占い師・霊媒師の集計（同じ役職が複数いても全員分を処理する）
+        await applyInspectionResults('預言者', 'SEER');
+        await applyInspectionResults('霊媒師', 'MEDIUM');
         // 人狼の襲撃および騎士の守護集計
         try {
             // 1. 生存している人狼の night_target_id を取得
@@ -857,21 +867,18 @@ export async function handlePhaseChange(newPhase, newTimelineIndex = null) {
                 ? knightsData.map(k => k.night_target_id).filter(id => id !== null && id !== undefined && id !== '')
                 : [];
 
-            // 3. 襲撃対象から守護対象を除外して、実際の犠牲者IDを決定
-            const uniqueAttackIds = [...new Set(attackTargetIds)];
-            const actualVictimIds = uniqueAttackIds.filter(attackId => !guardTargetIds.includes(attackId));
+            // 3. 人狼の票を多数決で1人に絞り、守護対象なら犠牲者なし
+            const victimId = decideWolfVictim(attackTargetIds);
 
-            if (actualVictimIds.length > 0) {
-                // 4. 被襲撃者を個別にID指定（eq('id', id)）で死亡に更新
-                for (const victimId of actualVictimIds) {
-                    const { error: killErr } = await supabaseClient
-                        .from('players')
-                        .update({ is_alive: false })
-                        .eq('id', victimId);
+            if (victimId && !guardTargetIds.includes(victimId)) {
+                // 4. 被襲撃者をID指定で死亡に更新
+                const { error: killErr } = await supabaseClient
+                    .from('players')
+                    .update({ is_alive: false })
+                    .eq('id', victimId);
 
-                    if (killErr) throw killErr;
-                    console.log(`[WOLF/KNIGHT] handlePhaseChange 襲撃対象を死亡に更新しました (ID: ${victimId})`);
-                }
+                if (killErr) throw killErr;
+                console.log(`[WOLF/KNIGHT] handlePhaseChange 襲撃対象を死亡に更新しました (ID: ${victimId})`);
             } else {
                 console.log('[WOLF/KNIGHT] handlePhaseChange 襲撃は発生しなかったか、騎士によって守られました。');
             }
@@ -1161,6 +1168,36 @@ export function clearSession() {
     location.reload();
 }
 
+/**
+ * 「部屋を作る」前の確認
+ * 参加者が1人以上いれば confirm を出し、ゲーム進行中ならより強い警告にする
+ * @returns {Promise<boolean>} 続行してよければ true
+ */
+async function confirmRecreateRoom() {
+    const [{ count, error: countError }, { data: statusData, error: statusError }] = await Promise.all([
+        supabaseClient.from('players').select('id', { count: 'exact', head: true }),
+        supabaseClient.from('game_status').select('current_phase').eq('id', 1).maybeSingle()
+    ]);
+
+    if (countError) {
+        // 人数が分からないまま全削除するのは危険なので、確認を挟む
+        console.warn('参加者数の取得に失敗しました:', countError);
+        return confirm('現在の参加者数を確認できませんでした。部屋を作り直すと全員の参加情報が消えます。続けますか？');
+    }
+    if (statusError) console.warn('ゲーム状態の取得に失敗しました:', statusError);
+
+    const playerCount = count || 0;
+    if (playerCount === 0) return true;
+
+    const phase = statusData ? statusData.current_phase : null;
+    const isInGame = phase && phase !== 'waiting' && phase !== 'result';
+    const baseMsg = `現在 ${playerCount} 人が参加中です。部屋を作り直すと全員の参加情報が消えます。続けますか？`;
+    const msg = isInGame
+        ? `⚠️ ゲーム進行中です！\n今部屋を作り直すと、進行中のゲームが壊れます。\n\n${baseMsg}`
+        : baseMsg;
+    return confirm(msg);
+}
+
 export async function joinGame(role) {
     const name = nameInput.value.trim();
     if (!name) {
@@ -1171,20 +1208,32 @@ export async function joinGame(role) {
 
     const btns = document.querySelectorAll('.login-btn');
     btns.forEach(btn => btn.disabled = true);
-    const originalText = event.currentTarget.innerHTML;
-    event.currentTarget.textContent = role === 'gm' ? '部屋を作る...' : '部屋に入る...';
+    // await 後は event.currentTarget が null になるため、押されたボタンを先に保持しておく
+    const clickedBtn = event.currentTarget;
+    const originalText = clickedBtn.innerHTML;
+    clickedBtn.textContent = role === 'gm' ? '部屋を作る...' : '部屋に入る...';
+    const restoreButtons = () => {
+        clickedBtn.innerHTML = originalText;
+        btns.forEach(btn => btn.disabled = false);
+    };
 
     try {
         let playerId = null;
         if (role === 'gm') {
+            // 参加者がいる場合は、全員の参加情報が消えることを確認してから削除する
+            const confirmed = await confirmRecreateRoom();
+            if (!confirmed) {
+                restoreButtons();
+                return;
+            }
+
             const { error: resetError } = await supabaseClient
                 .from('players')
                 .delete()
                 .neq('name', 'dummy_string_for_delete_all_records_12345');
             if (resetError) {
                 alert('参加者一覧のリセットに失敗しました。\nSupabaseのRLS設定を確認してください。');
-                event.currentTarget.innerHTML = originalText;
-                btns.forEach(btn => btn.disabled = false);
+                restoreButtons();
                 return;
             }
 
@@ -1208,8 +1257,7 @@ export async function joinGame(role) {
                 .select();
             if (error) {
                 alert('参加に失敗しました。名前が被っているか、テーブル設定を確認してください。');
-                event.currentTarget.innerHTML = originalText;
-                btns.forEach(btn => btn.disabled = false);
+                restoreButtons();
                 return;
             }
             if (data && data[0]) {
@@ -1222,7 +1270,6 @@ export async function joinGame(role) {
     } catch (err) {
         console.error(err);
         alert('予期せぬエラーが発生しました。');
-        event.currentTarget.innerHTML = originalText;
-        btns.forEach(btn => btn.disabled = false);
+        restoreButtons();
     }
 }

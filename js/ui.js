@@ -610,9 +610,13 @@ function renderGhostViewFor(playerName) {
                 const listEl = document.getElementById(listId);
                 if (listEl) {
                     // 全プレイヤーを非活性ボタンで描画（選択中のものをハイライト）
-                    const candidates = getCurrentPlayers().filter(p =>
-                        panelId === 'night-medium' ? !p.is_alive : (p.is_alive && p.name !== target.name)
-                    );
+                    // 実際の候補リスト（action.js の render〇〇Targets）と同じ条件にそろえる
+                    const candidates = getCurrentPlayers().filter(p => {
+                        if (panelId === 'night-medium') return !p.is_alive;
+                        if (panelId === 'night-knight') return p.is_alive;
+                        if (panelId === 'night-wolf') return p.is_alive && p.name !== target.name && p.role !== '人狼';
+                        return p.is_alive && p.name !== target.name;
+                    });
 
                     if (candidates.length === 0) {
                         listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4); font-size:0.85rem;">対象なし</p>';
@@ -653,9 +657,9 @@ function renderGhostViewFor(playerName) {
                 panel.appendChild(ghostInfo);
             }
             if (targetName) {
-                ghostInfo.innerHTML = `👁️ <strong>${target.name}</strong> の現在の選択: <span class="ghost-view-target-name">${targetName}</span>`;
+                ghostInfo.innerHTML = `👁️ <strong>${escapeHTML(target.name)}</strong> の現在の選択: <span class="ghost-view-target-name">${escapeHTML(targetName)}</span>`;
             } else {
-                ghostInfo.innerHTML = `👁️ <strong>${target.name}</strong> はまだ選択していません`;
+                ghostInfo.innerHTML = `👁️ <strong>${escapeHTML(target.name)}</strong> はまだ選択していません`;
             }
         }
     }
@@ -1143,7 +1147,7 @@ export async function showVoteResult(exiledName, voteLog) {
     // 追放者の表示
     const exileEl = document.getElementById('vote-result-exile');
     if (exiledName) {
-        exileEl.innerHTML = `🗳️ 「${exiledName}」が<br>追放されました`;
+        exileEl.innerHTML = `🗳️ 「${escapeHTML(exiledName)}」が<br>追放されました`;
         exileEl.style.color = '';
     } else {
         // 処刑なし
@@ -1331,7 +1335,7 @@ export function showMorningVictims() {
     if (uniqueVictimIds.length > 0) {
         const victims = getCurrentPlayers().filter(p => uniqueVictimIds.includes(p.id) && !p.is_alive);
         if (victims.length > 0) {
-            const victimNames = victims.map(v => v.name).join(' さん、');
+            const victimNames = victims.map(v => escapeHTML(v.name)).join(' さん、');
             textEl.innerHTML = `昨晩の犠牲者は <span style="color:#f7768e; font-weight:bold;">${victimNames} さん</span> でした。`;
         } else {
             textEl.innerHTML = '昨晩は誰も死にませんでした。';
@@ -1363,7 +1367,7 @@ export async function showSeerResult() {
             const resultLabel = data.night_result === '人狼'
                 ? '<span style="color:#f7768e; font-weight:bold;">【人狼】</span>'
                 : '<span style="color:#9ece6a; font-weight:bold;">【人間】</span>';
-            resultText.innerHTML = `「${targetName}」さんは ${resultLabel} でした`;
+            resultText.innerHTML = `「${escapeHTML(targetName)}」さんは ${resultLabel} でした`;
             resultArea.classList.remove('hidden');
             document.getElementById('morning-overlay').classList.remove('hidden');
         } else {
@@ -1394,7 +1398,7 @@ export async function showMediumResult() {
             const resultLabel = data.night_result === '人狼'
                 ? '<span style="color:#f7768e; font-weight:bold;">【人狼】</span>'
                 : '<span style="color:#9ece6a; font-weight:bold;">【人間】</span>';
-            resultText.innerHTML = `🔮 霊媒結果: 「${targetName}」さんは ${resultLabel} でした`;
+            resultText.innerHTML = `🔮 霊媒結果: 「${escapeHTML(targetName)}」さんは ${resultLabel} でした`;
             resultArea.classList.remove('hidden');
             document.getElementById('morning-overlay').classList.remove('hidden');
         } else {
@@ -1445,7 +1449,7 @@ export function renderNightActionStatus() {
         const hasActed = !needsAction || !!p.night_target_id;
         const icon = hasActed ? '✅' : '⏳';
         const statusClass = hasActed ? 'acted' : 'pending';
-        html += `<div class="night-status-item ${statusClass}"><span class="night-status-icon">${icon}</span><span class="night-status-name">${p.name}</span><span class="night-status-role">${needsAction ? p.role : '（行動なし）'}</span></div>`;
+        html += `<div class="night-status-item ${statusClass}"><span class="night-status-icon">${icon}</span><span class="night-status-name">${escapeHTML(p.name)}</span><span class="night-status-role">${needsAction ? escapeHTML(p.role) : '（行動なし）'}</span></div>`;
     });
 
     html += '</div>';
@@ -1845,7 +1849,7 @@ export function receiveChatMessage(data) {
 
     msgDiv.innerHTML = `
         <div class="chat-msg-header">
-            <span class="chat-msg-sender">[${data.sender_role}] ${data.sender}</span>
+            <span class="chat-msg-sender">[${escapeHTML(data.sender_role)}] ${escapeHTML(data.sender)}</span>
             <span class="chat-msg-time">${timeStr}</span>
         </div>
         <div class="chat-msg-body">${escapeHTML(data.message)}</div>
@@ -1876,7 +1880,8 @@ export function renderChatHistory(messages) {
 }
 
 export function escapeHTML(str) {
-    return str.replace(/[&<>'"]/g,
+    // null / undefined / 数値が来ても落ちないように文字列化してからエスケープ
+    return String(str ?? '').replace(/[&<>'"]/g,
         tag => ({
             '&': '&amp;',
             '<': '&lt;',
