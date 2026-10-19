@@ -1050,9 +1050,13 @@ html[data-light="day"] .light-icon-day {
     border: 1.5px dashed var(--line);
 }
 
-/* 死亡者を選んだとき（霊媒師）も、選択中の見た目（外枠＋浮き）は他の役職と同じにする */
+/* 選択中は、生きている人でも死者でもまったく同じ見た目にする
+   （死者を選ぶのは霊媒師だけなので、見た目が違うと霊媒師だと分かってしまう） */
 .target-btn.night-dead.selected {
-    box-shadow: 0 0 0 3px var(--accent), var(--shadow-card-lift);
+    background: var(--paper);
+    color: var(--ink);
+    border: none;
+    box-shadow: var(--card-frame), 0 0 0 3px var(--accent), var(--shadow-card-lift);
 }
 
 .target-btn:disabled {
@@ -1074,11 +1078,14 @@ html[data-light="day"] .light-icon-day {
 }
 
 /* ---------- 朝 ---------- */
+/* PC 幅（1440×900）で「あなたの結果」までスクロールなしで見えるよう、朝のパネルの余白だけ詰めている */
 .morning-panel {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.25rem;
+    gap: 0.75rem;
+    padding-top: 1.1rem;
+    padding-bottom: 1.1rem;
     text-align: center;
 }
 
@@ -1100,7 +1107,7 @@ html[data-light="day"] .light-icon-day {
     display: flex;
     justify-content: center;
     gap: 14px;
-    padding: 8px 0 14px;
+    padding: 4px 0 8px;
 }
 
 /* 犠牲者は少し傾けた名前カード */

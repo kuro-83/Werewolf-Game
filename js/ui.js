@@ -1563,7 +1563,7 @@ export function renderTimeline() {
     const phaseSub = document.getElementById('phase-sub');
     const currentStep = GAME_TIMELINE[currentTimelineIndex];
     if (phaseSub && currentStep) {
-        const dayMatch = currentStep.label.match(/【(\d+)日目】/);
+        const dayMatch = currentStep.label.match(/^(\d+)日目/);
         phaseSub.textContent = dayMatch ? `${dayMatch[1]}日目・${currentStep.period}` : currentStep.period;
     }
 

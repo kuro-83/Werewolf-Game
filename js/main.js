@@ -122,7 +122,19 @@ window._joinGameCallback = function (name, role, playerId) {
 // =============================================
 // リアルタイム同期（Supabase Realtime）
 // =============================================
-async function startGameSync() {
+// 取得が重なったとき（再接続など）に、最後に始めた取得の結果だけを使うための連番
+let loadSeq = 0;
+// 初期取得の最中に Realtime で届いた参加者（取得結果に含まれていなければ足す）
+let insertedWhileLoading = null;
+
+/**
+ * game_status と players を取得して画面に反映する
+ * Realtime の購読が SUBSCRIBED になった後（再接続時も）に呼ぶ。
+ * 購読より先に取得すると、その間の参加（INSERT）を取りこぼすため。
+ */
+async function loadGameState() {
+    const seq = ++loadSeq;
+    insertedWhileLoading = new Map();
     try {
         const phaseRes = await supabaseClient
             .from('game_status')
@@ -137,7 +149,18 @@ async function startGameSync() {
             .select('id, name, is_alive, role, vote_target_id, night_target_id');
         if (playersRes.error) throw playersRes.error;
 
-        setCurrentPlayers(playersRes.data ? playersRes.data : []);
+        // もっと新しい取得が始まっていたら、この結果は使わない
+        if (seq !== loadSeq) return;
+
+        // 取得の最中に届いた参加者が結果に含まれていなければ足す（取得結果で上書きして消さないため）
+        const fetchedPlayers = playersRes.data ? [...playersRes.data] : [];
+        insertedWhileLoading.forEach((row, id) => {
+            if (!fetchedPlayers.some(p => String(p.id) === id)) fetchedPlayers.push(row);
+        });
+        insertedWhileLoading = null;
+        playersRes.data = fetchedPlayers;
+
+        setCurrentPlayers(fetchedPlayers);
 
         // ── 古いセッション（id を持っていない）の補完 ──
         // 名前で自分の行を探して id を保存する。見つからない・同名が複数いて特定できない場合はログイン画面に戻す
@@ -192,11 +215,16 @@ async function startGameSync() {
         updateGmTimelineButtons();
 
     } catch (error) {
+        if (seq === loadSeq) insertedWhileLoading = null;
         console.error('初期データの取得エラー:', error);
         phaseElement.textContent = '接続エラー';
     }
+}
 
-    // Realtime サブスクリプション
+async function startGameSync() {
+    let loadedOnce = false;
+
+    // Realtime の購読を先に始め、SUBSCRIBED になってから初期データを取得する
     supabaseClient.channel('room_sync_channel')
         // game_status の更新（フェーズ変更）
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_status' },
@@ -224,8 +252,17 @@ async function startGameSync() {
         // プレイヤーの入室
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'players' },
             (payload) => {
+                // 初期取得の最中なら覚えておく（取得結果に含まれていなければ後で足す）
+                if (insertedWhileLoading) insertedWhileLoading.set(String(payload.new.id), payload.new);
+
+                // 取得と INSERT の両方で同じ人が入らないよう、同じ id がいれば中身だけ更新する
                 const players = getCurrentPlayers();
-                players.push(payload.new);
+                const idx = players.findIndex(p => String(p.id) === String(payload.new.id));
+                if (idx !== -1) {
+                    players[idx] = payload.new;
+                } else {
+                    players.push(payload.new);
+                }
                 setCurrentPlayers(players);
                 renderPlayerList();
                 renderMemoList();
@@ -349,7 +386,24 @@ async function startGameSync() {
                 }
             }
         )
-        .subscribe();
+        .subscribe((status) => {
+            // 初回の接続時と、通信が切れて再接続したときの両方で取得し直す
+            if (status === 'SUBSCRIBED') {
+                loadedOnce = true;
+                loadGameState();
+            } else {
+                console.warn('[REALTIME] 購読の状態:', status);
+            }
+        });
+
+    // 購読がいつまでも SUBSCRIBED にならない場合（Realtime が使えない等）でも、画面が空のままにならないようにする
+    setTimeout(() => {
+        if (!loadedOnce) {
+            console.warn('[REALTIME] 購読の完了を待たずに初期データを取得します');
+            loadedOnce = true;
+            loadGameState();
+        }
+    }, 5000);
 }
 
 // =============================================
