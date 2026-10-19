@@ -41,11 +41,9 @@ export async function submitVote(targetName, targetId) {
     setHasVotedToday(true);
 
     // 即座にすべての投票ボタンを無効化（二重押し・時間差投票を物理的にブロック）
-    const buttons = document.querySelectorAll('#vote-target-list .target-btn');
+    const buttons = document.querySelectorAll('#vote-target-list .target-btn, #btn-vote-submit, #btn-vote-skip');
     buttons.forEach(btn => {
         btn.disabled = true;
-        btn.style.opacity = '0.4';
-        btn.style.cursor = 'not-allowed';
     });
 
     try {
@@ -87,17 +85,17 @@ export async function closeVoting() {
 }
 
 export function disableVoteButtons() {
-    // 投票ボタンを全て disabled に
-    const buttons = document.querySelectorAll('#vote-target-list .target-btn');
+    // 投票ボタン（名前カード・投票・スキップ）を全て disabled に
+    const buttons = document.querySelectorAll('#vote-target-list .target-btn, #btn-vote-submit, #btn-vote-skip');
     buttons.forEach(btn => {
         btn.disabled = true;
-        btn.style.opacity = '0.4';
-        btn.style.cursor = 'not-allowed';
     });
-    // または投票セレクトパネルを「締め切り中」表示に切り替え
+    // 「締め切りました」の案内を出す
+    // （以前は #vote-select の中身を丸ごと書き換えていたため、次の投票日に名前カードの置き場所が無くなっていた）
+    const closedNote = document.getElementById('vote-closed-note');
     const selectPanel = document.getElementById('vote-select');
-    if (selectPanel && !selectPanel.classList.contains('hidden')) {
-        selectPanel.innerHTML = '<h2>🔒 締め切り中</h2><p style="color:#c0caf5;">GMが投票を締め切りました。<br>集計中...</p>';
+    if (closedNote && selectPanel && !selectPanel.classList.contains('hidden')) {
+        closedNote.classList.remove('hidden');
     }
 }
 
@@ -116,8 +114,6 @@ export async function submitVoteSkip() {
     const buttons = document.querySelectorAll('#vote-target-list .target-btn, #btn-vote-skip');
     buttons.forEach(btn => {
         btn.disabled = true;
-        btn.style.opacity = '0.4';
-        btn.style.cursor = 'not-allowed';
     });
 
     try {
@@ -137,7 +133,7 @@ export async function submitVoteSkip() {
         document.getElementById('vote-select').classList.add('hidden');
         const donePanel = document.getElementById('vote-done');
         donePanel.classList.remove('hidden');
-        donePanel.querySelector('h2').textContent = '⏭️ スキップ';
+        donePanel.querySelector('h2').textContent = 'スキップ';
         donePanel.querySelector('p').textContent = '追放なしに1票。他のプレイヤーを待っています…';
     } catch (err) {
         console.error('スキップ処理エラー:', err);
@@ -346,7 +342,7 @@ function renderNightChoices(kind, listId, btnId) {
     const choices = getNightChoices(kind);
 
     if (choices.length === 0) {
-        list.innerHTML = '<p style="color:#888;">選べるプレイヤーがいません</p>';
+        list.innerHTML = '<p class="empty-note">選べるプレイヤーがいません</p>';
         return;
     }
 
@@ -366,7 +362,10 @@ function renderNightChoices(kind, listId, btnId) {
             document.querySelectorAll(`#${listId} .target-btn`).forEach(x => x.classList.remove('selected'));
             b.classList.add('selected');
             nightSelections[kind] = { id: t.id, name: t.name };
-            if (btn) btn.style.display = '';
+            if (btn) {
+                btn.textContent = `${t.name}さんに決定`;
+                btn.style.display = '';
+            }
         };
         list.appendChild(b);
     });

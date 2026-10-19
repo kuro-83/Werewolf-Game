@@ -1,2731 +1,2120 @@
 /* =============================================
-   人狼ゲーム管理 - スタイルシート
+   人狼 — カードゲームの卓
+   - テーブル（背景）はフェルト地、プレイヤーの名前や役職はトランプのようなカード
+   - 配色は html[data-palette]、照明（朝・昼・夜）は html[data-light] で切り替える
+   - 角丸は「カード 8px」「ボタン・入力欄 6px」「パネル・モーダル 10px」の3種類だけ
+   - 影はカードとパネルにだけ付ける
    ============================================= */
 
-/* --------- CSS変数（テーマトークン） --------- */
+/* ---------- トークン ---------- */
 :root {
-    --bg-color: #1a1b26;
-    --text-color: #c0caf5;
-    --card-bg: rgba(26, 27, 38, 0.6);
-    --border-color: rgba(192, 202, 245, 0.1);
-    --accent: #7aa2f7;
-    --bg-gradient-start: #292e42;
-    --bg-gradient-end: #1a1b26;
-    --btn-gm: #ff9e64;
-    --btn-player: #7dcfff;
+    /* テーブルの色相・彩度（明るさは照明で決める） */
+    --h: 345;
+    --s: 42%;
+    --accent: #D9B66A;
+    --on-accent: #2A1219;
+
+    /* 全配色で共通 */
+    --text: #F4EFE6;
+    --text-dim: rgba(244, 239, 230, 0.66);
+    --line: rgba(244, 239, 230, 0.18);
+    --surface: rgba(244, 239, 230, 0.08);
+
+    --paper: #F3EEE4;
+    --ink: #24161A;
+    --ink-dim: rgba(36, 22, 26, 0.62);
+    --ink-line: rgba(36, 22, 26, 0.28);
+    --ink-wash: rgba(36, 22, 26, 0.06);
+    --gold: #C9A45C;
+    --back: #22314F;
+    --lattice: color-mix(in srgb, var(--accent) 38%, transparent);
+
+    /* 面（テーブルの色から作る） */
+    --panel-bg: hsl(var(--h) var(--s) 6% / 0.38);
+    --modal-bg: hsl(var(--h) var(--s) 10%);
+    --scrim: hsl(var(--h) var(--s) 4% / 0.78);
+
+    /* 配色ボタン・パネルの見本色 */
+    --sw-wine: #6A2737;
+    --sw-felt: #1F5641;
+    --sw-navy: #26365C;
+    --sw-ember: #3A2C27;
+    --ac-wine: #D9B66A;
+    --ac-felt: #D8B562;
+    --ac-navy: #E6D08C;
+    --ac-ember: #C9473B;
+
+    --r-card: 8px;
+    --r-ctl: 6px;
+    --r-panel: 10px;
+
+    --shadow-card: 0 4px 10px rgba(0, 0, 0, 0.3);
+    --shadow-card-lift: 0 14px 24px rgba(0, 0, 0, 0.45);
+    --shadow-panel: 0 12px 32px rgba(0, 0, 0, 0.32);
+    /* 名前カードの紙＋内側の金線 */
+    --card-frame: inset 0 0 0 5px var(--paper), inset 0 0 0 6px var(--gold);
+
+    --font-display: 'Kaisei Tokumin', serif;
+    --font-body: 'Zen Kaku Gothic New', sans-serif;
 }
 
-/* --------- ベーステーマ --------- */
+html[data-palette="felt"] {
+    --h: 155;
+    --s: 45%;
+    --accent: #D8B562;
+    --on-accent: #1C2A22;
+}
+
+html[data-palette="navy"] {
+    --h: 222;
+    --s: 40%;
+    --accent: #E6D08C;
+    --on-accent: #151C2E;
+}
+
+html[data-palette="ember"] {
+    --h: 14;
+    --s: 16%;
+    --accent: #C9473B;
+    --on-accent: #FBF3EA;
+}
+
+/* ---------- 基本 ---------- */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    background: hsl(var(--h) var(--s) 10%);
+}
+
 body {
     margin: 0;
-    font-family: 'Noto Sans JP', sans-serif;
-    background-color: var(--bg-color);
-    background-image: radial-gradient(circle at 50% 0%, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 70%);
-    color: var(--text-color);
     min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    transition: all 1s ease;
-    overflow-x: hidden;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-weight: 500;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
 }
 
-body.theme-waiting {}
-
-body.theme-discussion {
-    --bg-gradient-start: #ff9e64;
-    --bg-gradient-end: #c53b53;
-    --text-color: #ffffff;
-    --card-bg: rgba(255, 255, 255, 0.15);
-    --accent: #ffc777;
-    --border-color: rgba(255, 255, 255, 0.3);
+h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    line-height: 1.35;
 }
 
-body.theme-voting {
-    --bg-gradient-start: #bb9af7;
-    --bg-gradient-end: #414868;
-    --text-color: #ffffff;
-    --card-bg: rgba(0, 0, 0, 0.3);
-    --accent: #7dcfff;
-    --border-color: rgba(255, 255, 255, 0.2);
+button,
+input,
+textarea {
+    font: inherit;
+    color: inherit;
 }
 
-body.theme-night {
-    --bg-gradient-start: #111116;
-    --bg-gradient-end: #000000;
-    --text-color: #7aa2f7;
-    --card-bg: rgba(10, 10, 15, 0.8);
-    --accent: #f7768e;
-    --border-color: rgba(247, 118, 142, 0.2);
+.hidden {
+    display: none !important;
 }
 
-/* リザルト：市民勝利テーマ */
-body.theme-result-citizen {
-    --bg-gradient-start: #1a4b6e;
-    --bg-gradient-end: #0d2137;
-    --text-color: #cff5e7;
-    --card-bg: rgba(0, 30, 60, 0.7);
-    --accent: #73daca;
-    --border-color: rgba(115, 218, 202, 0.3);
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
 }
 
-/* リザルト：人狼勝利テーマ */
-body.theme-result-wolf {
-    --bg-gradient-start: #3d0000;
-    --bg-gradient-end: #0a0000;
-    --text-color: #ffc0c0;
-    --card-bg: rgba(40, 0, 0, 0.75);
-    --accent: #f7768e;
-    --border-color: rgba(247, 118, 142, 0.3);
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
-/* リザルト：てるてる勝利テーマ */
-body.theme-result-teruteru {
-    --bg-gradient-start: #4a2f0f;
-    --bg-gradient-end: #1f0f05;
-    --text-color: #ffebd1;
-    --card-bg: rgba(60, 30, 10, 0.75);
-    --accent: #ffc777;
-    --border-color: rgba(255, 199, 119, 0.3);
+.icon-sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
 }
 
-/* --------- レイアウト --------- */
-.container {
-    width: 90%;
-    max-width: 500px;
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-    z-index: 10;
-    padding: 2rem 0;
-    max-height: 100vh;
-    overflow-y: auto;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+.icon {
+    width: 1.1em;
+    height: 1.1em;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+    vertical-align: -0.18em;
 }
 
-.container::-webkit-scrollbar {
-    display: none;
-}
-
-/* --------- カード --------- */
-.card {
-    background: var(--card-bg);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--border-color);
-    border-radius: 24px;
-    padding: 3.2rem 2.5rem;
+.empty-note {
+    color: var(--text-dim);
+    font-size: 0.9rem;
     text-align: center;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    transition: all 0.5s ease;
+    margin: 0.5rem 0;
 }
 
-/* --------- ログイン画面 --------- */
-.login-card {
-    padding: 3rem 2rem;
+/* ---------- テーブル（背景）と照明 ---------- */
+.table-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
 }
 
-.login-title {
-    font-size: 2.2rem;
-    font-weight: 900;
-    margin-top: 0;
-    margin-bottom: 2rem;
-    text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-    letter-spacing: 2px;
+.table-light {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.8s ease;
 }
 
-.input-group {
-    margin-bottom: 2rem;
+/* フェルトの目（ごく薄い） */
+.table-bg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.012) 0 1px, transparent 1px 3px),
+        repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.03) 0 1px, transparent 1px 3px);
+}
+
+/* 夜：真ん中だけランプで照らされた感じ */
+.light-night {
+    background: radial-gradient(ellipse 70% 75% at 50% 40%,
+            hsl(var(--h) var(--s) 24%) 0%,
+            hsl(var(--h) var(--s) 13%) 70%,
+            hsl(var(--h) var(--s) 7%) 100%);
+}
+
+/* 朝：上から朝焼け */
+.light-morning {
+    background:
+        radial-gradient(ellipse 120% 55% at 50% -10%, rgba(255, 196, 120, 0.38), transparent 70%),
+        radial-gradient(ellipse 110% 90% at 50% 35%, hsl(var(--h) var(--s) 30%), hsl(var(--h) var(--s) 18%));
+}
+
+/* 昼：明るいが、まぶしくしない */
+.light-day {
+    background: radial-gradient(ellipse 130% 110% at 50% 30%,
+            hsl(var(--h) var(--s) 29%) 0%,
+            hsl(var(--h) var(--s) 24%) 75%,
+            hsl(var(--h) var(--s) 20%) 100%);
+}
+
+html[data-light="night"] .light-night,
+html[data-light="morning"] .light-morning,
+html[data-light="day"] .light-day {
+    opacity: 1;
+}
+
+/* ---------- ボタン・入力欄 ---------- */
+.btn-primary,
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5em;
+    min-height: 54px;
+    padding: 0 1.4rem;
+    border-radius: var(--r-ctl);
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, filter 0.15s ease;
+}
+
+/* メインの操作：アクセント色の塗り */
+.btn-primary {
+    background: var(--accent);
+    color: var(--on-accent);
+    border: 1px solid var(--accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+    filter: brightness(1.07);
+}
+
+/* サブの操作：透明地に線色の枠 */
+.btn-secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--line);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--surface);
+    border-color: var(--text-dim);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-small {
+    min-height: 38px;
+    padding: 0 0.9rem;
+    font-size: 0.88rem;
+}
+
+.btn-block {
+    width: 100%;
+}
+
+.btn-danger {
+    border-style: dashed;
+}
+
+.link-btn {
+    background: none;
+    border: none;
+    padding: 0.4rem;
+    color: var(--text-dim);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    align-self: center;
+}
+
+.icon-text-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--text-dim);
+    border-radius: var(--r-ctl);
+    padding: 0.25rem 0.55rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.icon-text-btn:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
 }
 
 .name-input {
     width: 100%;
-    box-sizing: border-box;
-    padding: 1.2rem;
-    font-size: 1.2rem;
-    font-weight: 700;
-    text-align: center;
-    border: 3px solid var(--border-color);
-    border-radius: 16px;
-    background: rgba(0, 0, 0, 0.2);
-    color: #fff;
-    outline: none;
-    transition: all 0.3s ease;
-    font-family: inherit;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    color: var(--text);
+    padding: 0.8rem 1rem;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 1rem;
+}
+
+.name-input::placeholder {
+    color: var(--text-dim);
 }
 
 .name-input:focus {
+    outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 15px var(--accent);
-    background: rgba(0, 0, 0, 0.4);
 }
 
-/* --------- ボタン --------- */
+.name-input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.input-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.input-row .name-input {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ---------- 配色ボタン・パネル ---------- */
+.palette-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 38px;
+    padding: 0 0.75rem;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    color: var(--text);
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.palette-btn:hover {
+    background: var(--surface);
+}
+
+.palette-dots {
+    display: inline-flex;
+    gap: 3px;
+}
+
+.palette-dots i {
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+}
+
+[data-dot="wine"] { background: var(--sw-wine); }
+[data-dot="felt"] { background: var(--sw-felt); }
+[data-dot="navy"] { background: var(--sw-navy); }
+[data-dot="ember"] { background: var(--sw-ember); }
+
+.palette-panel {
+    position: fixed;
+    z-index: 20000;
+    width: min(300px, calc(100vw - 32px));
+    background: var(--modal-bg);
+    border: 1px solid var(--line);
+    border-radius: var(--r-panel);
+    box-shadow: var(--shadow-panel);
+    padding: 0.9rem;
+}
+
+.palette-note {
+    margin: 0 0 0.6rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+}
+
+.palette-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.palette-option {
+    display: grid;
+    grid-template-columns: 30px 1fr 14px;
+    align-items: center;
+    gap: 0.7rem;
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--r-ctl);
+    color: var(--text);
+    text-align: left;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.palette-option:hover {
+    background: var(--surface);
+}
+
+.palette-option[aria-checked="true"] {
+    border-color: var(--accent);
+    background: var(--surface);
+}
+
+.palette-swatch {
+    width: 30px;
+    height: 22px;
+    border-radius: var(--r-ctl);
+    border: 1px solid var(--line);
+}
+
+.palette-accent {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+}
+
+[data-palette-key="wine"] .palette-swatch { background: var(--sw-wine); }
+[data-palette-key="felt"] .palette-swatch { background: var(--sw-felt); }
+[data-palette-key="navy"] .palette-swatch { background: var(--sw-navy); }
+[data-palette-key="ember"] .palette-swatch { background: var(--sw-ember); }
+[data-palette-key="wine"] .palette-accent { background: var(--ac-wine); }
+[data-palette-key="felt"] .palette-accent { background: var(--ac-felt); }
+[data-palette-key="navy"] .palette-accent { background: var(--ac-navy); }
+[data-palette-key="ember"] .palette-accent { background: var(--ac-ember); }
+
+/* ---------- カード（共通の部品） ---------- */
+/* 役職カードの裏面：紺の地にアクセント色の斜め格子、白い縁 */
+.art-back,
+.role-card-back {
+    background-color: var(--back);
+    background-image:
+        repeating-linear-gradient(45deg, var(--lattice) 0 1px, transparent 1px 10px),
+        repeating-linear-gradient(-45deg, var(--lattice) 0 1px, transparent 1px 10px);
+    border: 4px solid var(--paper);
+}
+
+/* ---------- ログイン ---------- */
+.login-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 72px 16px 48px;
+    position: relative;
+}
+
+.login-palette-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+}
+
+.login-view {
+    width: min(380px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    text-align: center;
+}
+
+.login-art {
+    position: relative;
+    width: 230px;
+    height: 190px;
+    margin: 0 auto 0.25rem;
+}
+
+.art-card {
+    position: absolute;
+    left: 50%;
+    top: 22px;
+    width: 104px;
+    height: 146px;
+    margin-left: -52px;
+    border-radius: var(--r-card);
+    box-shadow: var(--shadow-card);
+}
+
+.art-back-1 {
+    transform: translate(-44px, 8px) rotate(-15deg);
+}
+
+.art-back-2 {
+    transform: translate(44px, 8px) rotate(13deg);
+}
+
+.art-face {
+    transform: translateY(-8px) rotate(-2deg);
+    background: var(--paper);
+    box-shadow: var(--card-frame), var(--shadow-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink);
+}
+
+.art-face .icon {
+    width: 58px;
+    height: 58px;
+    stroke-width: 1.3;
+}
+
+.login-title {
+    font-weight: 800;
+    font-size: 3.2rem;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    margin: 0.2rem 0 0.8rem;
+}
+
+.login-input {
+    text-align: center;
+}
+
 .login-btn {
     width: 100%;
-    padding: 1.2rem;
-    font-size: 1.2rem;
-    font-weight: 900;
-    border-radius: 16px;
-    margin-bottom: 1rem;
-    border: none;
-    cursor: pointer;
-    transition: all 0.1s ease;
-    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.3);
-    color: #111;
 }
 
-.login-btn:active {
-    transform: translateY(6px);
-    box-shadow: 0 0px 0 rgba(0, 0, 0, 0.3);
+/* ---------- ゲーム画面のレイアウト（上のバー＋3列） ---------- */
+.game-layout {
+    display: grid;
+    grid-template-columns: minmax(210px, 250px) minmax(0, 1fr) minmax(210px, 270px);
+    grid-template-areas:
+        "top top top"
+        "ghost ghost ghost"
+        "left main right";
+    grid-template-rows: auto auto 1fr;
+    min-height: 100vh;
 }
 
-.login-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: translateY(6px);
-    box-shadow: 0 0px 0 rgba(0, 0, 0, 0.3);
+/* 上のバー */
+.topbar {
+    grid-area: top;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 24px;
+    border-bottom: 1px solid var(--line);
 }
 
-.btn-player {
-    background-color: var(--btn-player);
+.topbar-brand {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.5rem;
+    letter-spacing: 0.08em;
 }
 
-.btn-player:hover:not(:disabled) {
-    filter: brightness(1.1);
+.topbar-phase {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-rows: auto auto;
+    column-gap: 0.6rem;
+    align-items: center;
+    justify-content: center;
+    text-align: left;
 }
 
-.btn-gm {
-    background-color: var(--btn-gm);
+.light-icons {
+    grid-row: 1 / span 2;
+    display: flex;
+    color: var(--accent);
 }
 
-.btn-gm:hover:not(:disabled) {
-    filter: brightness(1.1);
+.light-icon {
+    display: none;
+    width: 34px;
+    height: 34px;
+    stroke-width: 1.5;
 }
 
-.btn-danger {
-    background-color: rgba(247, 118, 142, 0.2);
-    color: #f7768e;
-    border-color: rgba(247, 118, 142, 0.4);
+html[data-light="night"] .light-icon-night,
+html[data-light="morning"] .light-icon-morning,
+html[data-light="day"] .light-icon-day {
+    display: block;
 }
 
-.btn-danger:hover {
-    background-color: #f7768e;
-    color: #111;
+.phase-name {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.9rem;
+    line-height: 1.1;
 }
 
-/* --------- フェーズ表示 --------- */
-.phase-display h2 {
+.phase-name.update-anim {
+    animation: phaseIn 0.5s ease;
+}
+
+@keyframes phaseIn {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+}
+
+.phase-sub {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    line-height: 1.3;
+}
+
+.topbar-right {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.me-display {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+}
+
+/* 左右の列：背景は透明、線で区切るだけ */
+.sidebar {
+    padding: 1rem 16px 1.5rem;
+    align-self: start;
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+}
+
+.left-sidebar {
+    grid-area: left;
+    border-right: 1px solid var(--line);
+}
+
+.right-sidebar {
+    grid-area: right;
+    border-left: 1px solid var(--line);
+}
+
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-bottom: 0.8rem;
+}
+
+.sidebar-header h3 {
     margin: 0;
-    font-size: 1.1rem;
-    font-weight: 400;
-    opacity: 0.8;
-    letter-spacing: 2px;
+    font-size: 1.05rem;
 }
 
-.phase-badge {
-    font-size: 3rem;
-    font-weight: 900;
-    margin: 1rem 0 0;
-    text-shadow: 0 0 20px var(--accent);
-    letter-spacing: 4px;
-    transition: color 0.3s ease;
+.sidebar-sub {
+    display: block;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.72rem;
+    color: var(--text-dim);
 }
 
-.gm-badge {
-    display: inline-block;
-    background: rgba(255, 158, 100, 0.2);
-    border: 1px solid #ff9e64;
-    color: #ff9e64;
-    padding: 0.5rem 1rem;
-    border-radius: 20px;
+.sidebar-header-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+/* スマホ用のメモのドロワーは使わない（スマホでは列を縦に並べる） */
+.close-memo-btn,
+.toggle-memo-btn,
+.memo-mobile-overlay {
+    display: none !important;
+}
+
+/* 考察メモ：名前（小さく）＋入力欄の繰り返し */
+.memo-player-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.memo-item {
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.memo-player-name {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 0.3rem;
+}
+
+.memo-item.dead .memo-player-name {
+    text-decoration: line-through;
+}
+
+.memo-textarea {
+    display: block;
+    width: 100%;
+    min-height: 54px;
+    resize: vertical;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    color: var(--text);
+    padding: 0.45rem 0.6rem;
+    font-size: 0.88rem;
+}
+
+.memo-textarea::placeholder {
+    color: var(--text-dim);
+}
+
+.memo-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* タイムテーブル：時間（固定幅）＋内容 */
+.timeline-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.timeline-item {
+    display: grid;
+    grid-template-columns: 5.6em minmax(0, 1fr);
+    gap: 0.5rem;
+    padding: 0.45rem 0.6rem;
+    border-left: 2px solid transparent;
+    font-size: 0.84rem;
+}
+
+.timeline-period-badge {
+    color: var(--text-dim);
+    font-size: 0.76rem;
+    padding-top: 0.1rem;
+}
+
+.timeline-item.is-past {
+    color: var(--text-dim);
+}
+
+.timeline-item.is-current {
+    background: var(--surface);
+    border-left-color: var(--accent);
     font-weight: 700;
-    font-size: 0.9rem;
-    margin-bottom: 1rem;
 }
 
-.gm-hint {
-    color: #f7768e;
-    font-weight: 700;
-    margin-bottom: 1rem;
-    text-align: center;
-    animation: pulse 2s infinite;
-    font-size: 0.9rem;
+/* 中央の列 */
+.main-content {
+    grid-area: main;
+    min-width: 0;
+    padding: 1.5rem 24px 3rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
 }
 
-/* --------- プレイヤー役職表示 --------- */
-.my-role-display {
-    margin-top: 1.5rem;
+.main-content > * {
+    width: min(900px, 100%);
+}
+
+.toolbar {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+/* パネル（中央の列の板） */
+.panel {
+    width: min(900px, 100%);
+    background: var(--panel-bg);
+    border: 1px solid var(--line);
+    border-radius: var(--r-panel);
     padding: 1.5rem;
-    background: rgba(125, 207, 255, 0.15);
-    border: 2px solid var(--accent);
-    border-radius: 20px;
-    animation: popIn 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    box-shadow: var(--shadow-panel);
 }
 
-.my-role-title {
-    font-size: 1rem;
-    opacity: 0.9;
-    margin-bottom: 0.5rem;
-    font-weight: 700;
+.panel-title {
+    margin: 0 0 1rem;
+    font-size: 1.1rem;
+}
+
+.panel-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+}
+
+/* ---------- 役職カード ---------- */
+.role-section {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+}
+
+/* 寸法は全員同じ（役職によってカードの大きさが変わらないように） */
+.role-reveal-wrapper {
+    position: relative;
+    width: 180px;
+    aspect-ratio: 5 / 7;
+    flex-shrink: 0;
+    border-radius: var(--r-card);
+    cursor: pointer;
+    perspective: 900px;
+}
+
+.role-card-face {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 14px 8px;
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: var(--r-card);
+    box-shadow: var(--card-frame), var(--shadow-card);
+    text-align: center;
+    visibility: hidden;
+}
+
+.role-reveal-wrapper.is-revealed .role-card-face {
+    visibility: visible;
+}
+
+.role-face-faction {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    color: var(--ink-dim);
+    min-height: 1.2em;
+}
+
+.role-face-mark {
+    width: 46px;
+    height: 46px;
+    margin: 0.5rem 0 0.2rem;
+    stroke-width: 1.4;
+    color: var(--ink);
 }
 
 .my-role-name {
-    font-size: 2.5rem;
-    font-weight: 900;
-    color: var(--accent);
-    text-shadow: 0 0 15px var(--accent);
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.6rem;
+    line-height: 1.2;
+    color: var(--ink);
 }
 
-/* --------- プレイヤー一覧 --------- */
-.player-list-area {
-    margin-top: 2rem;
-    padding-top: 1.5rem;
-    border-top: 1px dashed var(--border-color);
+.role-face-summary {
+    margin: 0.4rem 0 0;
+    font-size: 0.7rem;
+    line-height: 1.5;
+    color: var(--ink-dim);
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
-.player-list-area h3 {
-    margin: 0 0 1rem 0;
-    font-size: 1rem;
-    font-weight: 700;
-    opacity: 0.8;
-}
-
-.player-list {
+/* 全員共通の空き枠（高さ固定） */
+.role-card-actions {
+    margin-top: auto;
+    height: 36px;
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
     justify-content: center;
-    gap: 0.8rem;
 }
 
-.player-item {
-    background: rgba(125, 207, 255, 0.15);
-    border: 1px solid rgba(125, 207, 255, 0.4);
-    color: #c0caf5;
-    padding: 0.6rem 1.2rem;
-    border-radius: 20px;
-    font-weight: 700;
-    font-size: 0.9rem;
-    animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+.role-reveal-wrapper:not(.is-revealed) .role-card-actions {
+    visibility: hidden;
+}
+
+/* 紙の上に置くボタン */
+.btn-secondary.on-card {
+    color: var(--ink);
+    border-color: var(--ink-line);
+    min-height: 32px;
+    padding: 0 0.7rem;
+    font-size: 0.8rem;
+}
+
+.btn-secondary.on-card:hover {
+    background: var(--ink-wash);
+    border-color: var(--ink-dim);
+}
+
+.role-card-back {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--r-card);
+    box-shadow: var(--shadow-card);
+    transition: transform 0.45s ease, opacity 0.45s ease;
+    transform-origin: center;
+}
+
+.role-reveal-wrapper.is-revealed .role-card-back {
+    opacity: 0;
+    transform: rotateY(90deg);
+    pointer-events: none;
+}
+
+.role-section-text {
     display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.my-role-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.25rem;
+}
+
+.role-hint {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+}
+
+.role-hint-open {
+    display: none;
+}
+
+.role-section:has(.is-revealed) .role-hint-closed {
+    display: none;
+}
+
+.role-section:has(.is-revealed) .role-hint-open {
+    display: block;
+}
+
+/* 幽霊モードで役職名に付く旧クラスは見た目を変えない */
+.my-role-name.ghost-view-role {
+    color: var(--ink);
+}
+
+/* ---------- 夜・投票の選択（全役職で同じ見た目） ---------- */
+.night-action-container {
+    display: flex;
+    flex-direction: column;
     align-items: center;
 }
 
-.player-item.dead {
-    opacity: 0.5;
-    background: rgba(0, 0, 0, 0.4);
-    border-color: rgba(255, 255, 255, 0.1);
-    color: #888;
-}
-
-.btn-kill {
-    background: transparent;
-    border: 1px solid #f7768e;
-    color: #f7768e;
-    border-radius: 8px;
-    padding: 0.2rem 0.5rem;
-    font-size: 0.75rem;
-    margin-left: 0.6rem;
-    cursor: pointer;
-    transition: 0.2s;
-    font-weight: 700;
-}
-
-.btn-kill:hover {
-    background: #f7768e;
-    color: #111;
-}
-
-.badge-dead {
-    display: inline-block;
-    background: rgba(255, 255, 255, 0.1);
-    color: #888;
-    padding: 0.2rem 0.5rem;
-    font-size: 0.75rem;
-    border-radius: 8px;
-    margin-left: 0.6rem;
-    font-weight: 700;
-}
-
-/* --------- 役職設定（GM専用） --------- */
-.role-settings {
-    margin-top: 1.5rem;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 16px;
-    padding: 1.5rem;
-    text-align: left;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.role-settings h3 {
-    margin: 0 0 1rem 0;
-    font-size: 1.1rem;
+.night-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
     text-align: center;
-    color: var(--btn-gm);
+}
+
+.night-question {
+    margin: 0;
+    font-size: 1.6rem;
+    min-height: 1.35em;
+}
+
+.night-note {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
+
+.night-picked {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+}
+
+.night-decide-btn,
+.change-night-target-btn {
+    width: min(360px, 100%);
+}
+
+/* 名前カードの列：PC は6列（最大 900px）、スマホは3列 */
+.target-list {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 14px;
+    width: 100%;
+    max-width: 900px;
+    padding-top: 12px;
+}
+
+/* 名前カード：5:7、紙の地に内側の金線 */
+.target-btn {
+    aspect-ratio: 5 / 7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 8px;
+    background: var(--paper);
+    color: var(--ink);
+    border: none;
+    border-radius: var(--r-card);
+    box-shadow: var(--card-frame), var(--shadow-card);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.05rem;
+    line-height: 1.3;
+    text-align: center;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.target-btn:hover:not(:disabled) {
+    transform: translateY(-4px);
+}
+
+/* 選択中：アクセント色の外枠 3px ＋ 影を深く ＋ 少し浮く */
+.target-btn.selected,
+.target-btn.ghost-selected {
+    transform: translateY(-10px);
+    box-shadow: var(--card-frame), 0 0 0 3px var(--accent), var(--shadow-card-lift);
+}
+
+.target-btn.selected:hover {
+    transform: translateY(-10px);
+}
+
+/* 死亡者：紙を外して透明に、破線の枠、薄い文字 */
+.target-btn.night-dead {
+    background: transparent;
+    color: var(--text-dim);
+    box-shadow: none;
+    border: 1.5px dashed var(--line);
+}
+
+/* 死亡者を選んだとき（霊媒師）も、選択中の見た目（外枠＋浮き）は他の役職と同じにする */
+.target-btn.night-dead.selected {
+    box-shadow: 0 0 0 3px var(--accent), var(--shadow-card-lift);
+}
+
+.target-btn:disabled {
+    cursor: default;
+}
+
+.target-btn:disabled:not(.ghost-view-btn) {
+    opacity: 0.45;
+}
+
+.ghost-view-info {
+    color: var(--text-dim);
+    font-size: 0.88rem;
+}
+
+.ghost-view-target-name {
+    color: var(--accent);
+    font-weight: 700;
+}
+
+/* ---------- 朝 ---------- */
+.morning-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+    text-align: center;
+}
+
+.morning-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.victim-result {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.victim-cards {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    padding: 8px 0 14px;
+}
+
+/* 犠牲者は少し傾けた名前カード */
+.victim-card {
+    width: 96px;
+    aspect-ratio: 5 / 7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 6px;
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: var(--r-card);
+    box-shadow: var(--card-frame), var(--shadow-card);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.95rem;
+    overflow-wrap: anywhere;
+    transform: rotate(-6deg);
+}
+
+.victim-card:nth-child(even) {
+    transform: rotate(5deg);
+}
+
+.victim-card.is-empty {
+    background: transparent;
+    box-shadow: none;
+    border: 1.5px dashed var(--line);
+    transform: none;
+}
+
+.victim-label {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+}
+
+.victim-names {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.35rem;
+}
+
+.rule {
+    width: 100%;
+    margin: 0;
+    border: none;
+    border-top: 1px solid var(--line);
+}
+
+.my-result {
+    width: 100%;
+}
+
+.my-result-title {
+    margin: 0 0 0.4rem;
+    font-size: 1.1rem;
+}
+
+/* 本文は3行分の高さを確保して、文言の長さで高さが変わりにくくする */
+.my-result-body {
+    min-height: 4.8em;
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* 結果の中のアクセント色の語（全員ちょうど1つ：判定 or 選んだ相手） */
+.result-accent {
+    color: var(--accent);
+    font-family: var(--font-display);
+    font-weight: 800;
+}
+
+/* ---------- 投票 ---------- */
+.vote-overlay {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.vote-progress-area {
+    width: min(420px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    align-self: center;
+}
+
+.vote-progress-text {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.vote-progress-bar {
+    height: 4px;
+    background: var(--line);
+    border-radius: var(--r-ctl);
+    overflow: hidden;
+}
+
+.vote-progress-fill {
+    width: 0;
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.4s ease;
+}
+
+.vote-closed-note {
+    margin: 0;
+    padding: 0.6rem 1rem;
+    border: 1px dashed var(--line);
+    border-radius: var(--r-ctl);
+    color: var(--text-dim);
+}
+
+.vote-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    width: min(360px, 100%);
+}
+
+.vote-actions > button {
+    width: 100%;
+}
+
+/* ---------- 全画面の板（投票結果・結果発表） ---------- */
+.table-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    padding: 48px 16px;
+    background: var(--scrim);
+}
+
+.overlay-panel {
+    width: min(720px, 100%);
+    margin: auto 0;
+    background: var(--modal-bg);
+    border: 1px solid var(--line);
+    border-radius: var(--r-panel);
+    box-shadow: var(--shadow-panel);
+    padding: 2rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.vote-result-exile {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.8rem;
+    line-height: 1.4;
+}
+
+.vote-result-exile.is-none {
+    color: var(--text-dim);
+}
+
+.vote-result-title {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    letter-spacing: 0.2em;
+}
+
+.vote-result-list {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+}
+
+.vote-secret-note {
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    text-align: center;
+    margin-bottom: 0.4rem;
+    display: inline-flex;
+    gap: 0.35rem;
+    align-items: center;
+    justify-content: center;
+}
+
+.vote-log-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.5rem 0.4rem;
+    border-bottom: 1px solid var(--line);
+}
+
+.vote-log-item .voter {
+    overflow-wrap: anywhere;
+}
+
+.vote-log-item .arrow {
+    color: var(--text-dim);
+}
+
+.vote-log-item .target {
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.vote-log-item .abstain {
+    color: var(--text-dim);
+}
+
+.ghost-vote-log-reveal {
+    margin-top: 1rem;
+    padding-top: 0.8rem;
+    border-top: 1px dashed var(--line);
+}
+
+.ghost-vote-log-reveal-title {
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    margin-bottom: 0.3rem;
+}
+
+.vote-countdown {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+}
+
+/* 結果発表 */
+.result-icon {
+    color: var(--accent);
+    display: flex;
+    justify-content: center;
+}
+
+.result-icon .icon {
+    width: 64px;
+    height: 64px;
+    stroke-width: 1.3;
+}
+
+.result-title {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 2.6rem;
+    line-height: 1.2;
+}
+
+.result-subtitle {
+    color: var(--text-dim);
+}
+
+.result-reveal-card {
+    text-align: left;
+    margin-top: 0.5rem;
+}
+
+.result-reveal-card .panel-title {
+    text-align: center;
+}
+
+.result-player-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.result-player-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 0.2rem;
+    border-bottom: 1px solid var(--line);
+}
+
+/* 小さな役職カード */
+.mini-role-card {
+    width: 46px;
+    aspect-ratio: 5 / 7;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: var(--r-card);
+    box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--gold), var(--shadow-card);
+}
+
+.mini-role-card .icon {
+    width: 20px;
+    height: 20px;
+}
+
+.mini-role-card.is-hidden {
+    background: transparent;
+    box-shadow: none;
+    border: 1.5px dashed var(--line);
+}
+
+.result-player-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.result-player-role {
+    display: block;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+}
+
+.result-status {
+    font-size: 0.82rem;
+    padding: 0.15rem 0.55rem;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    white-space: nowrap;
+}
+
+.result-status.is-dead {
+    border-style: dashed;
+    color: var(--text-dim);
+}
+
+/* ---------- GM パネル ---------- */
+.gm-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.gm-controls-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.gm-vote-close {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--line);
 }
 
 .role-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.8rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    padding-bottom: 0.8rem;
+    gap: 1rem;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--line);
 }
 
-.role-row:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-    padding-bottom: 0;
+.role-name-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
 }
 
 .role-name {
+    font-family: var(--font-display);
     font-weight: 700;
-    font-size: 1rem;
+}
+
+.info-icon-btn {
+    display: inline-flex;
+    padding: 0.2rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--r-ctl);
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+.info-icon-btn:hover {
+    color: var(--text);
+    border-color: var(--line);
 }
 
 .counter-group {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.6rem;
 }
 
 .counter-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    color: #fff;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
+    width: 38px;
+    height: 38px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    color: var(--text);
+    font-size: 1.1rem;
+    font-weight: 700;
     cursor: pointer;
-    font-weight: 900;
-    font-size: 1.2rem;
-    transition: 0.2s;
 }
 
 .counter-btn:hover {
-    background: var(--btn-gm);
-    color: #000;
+    background: var(--surface);
 }
 
 .role-count-display {
-    font-size: 1.2rem;
-    font-weight: 900;
-    width: 20px;
+    min-width: 2ch;
     text-align: center;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.2rem;
 }
 
 .total-info {
-    text-align: center;
     margin-top: 1rem;
-    font-weight: 700;
-    padding-top: 1rem;
-    border-top: 1px dashed rgba(255, 255, 255, 0.2);
+    padding: 0.65rem 1rem;
+    border-radius: var(--r-ctl);
+    border: 1px solid var(--line);
     font-size: 0.9rem;
-    transition: color 0.3s ease;
 }
 
-.total-error {
-    color: #f7768e;
-}
-
-.total-ok {
-    color: #9ece6a;
-}
-
-/* --------- GMパネル --------- */
-.gm-panel {
-    padding: 2rem;
-}
-
-.gm-panel h3 {
-    margin: 0 0 1.5rem 0;
-    font-size: 1.2rem;
-    font-weight: 700;
-    opacity: 0.9;
-}
-
-.button-group {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-}
-
-.action-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    padding: 1rem;
-    font-size: 1rem;
-    font-weight: 700;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: 0.2s;
-}
-
-.action-btn:hover {
-    background: var(--accent);
-    color: #000;
-    transform: translateY(-2px);
-}
-
-/* --------- パーティクル背景 --------- */
-.particles {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 1;
-    opacity: 0.5;
-    background-image: radial-gradient(var(--accent) 1px, transparent 1px);
-    background-size: 50px 50px;
-}
-
-/* --------- ユーティリティ --------- */
-.hidden {
-    display: none !important;
-}
-
-/* --------- 霊界オーバーレイ（死者用） --------- */
-.ghost-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.85);
-    z-index: 9999;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    pointer-events: all;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-}
-
-.ghost-message {
-    color: #f7768e;
-    font-size: 2.5rem;
-    font-weight: 900;
-    text-align: center;
-    text-shadow: 0 0 20px rgba(247, 118, 142, 0.5);
-    animation: popIn 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
-.ghost-message small {
-    display: block;
-    margin-top: 1rem;
-    font-size: 1.2rem;
-    color: #888;
-    font-weight: 400;
-    text-shadow: none;
-}
-
-/* --------- 夜フェーズ用インラインコンテナ（3カラム維持用） --------- */
-.night-action-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    margin-top: 2rem;
-    pointer-events: all;
-}
-
-.night-action-container.hidden {
-    display: none !important;
-}
-
-/* --------- 夜フェーズオーバーレイ（生存者用） --------- */
-.night-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(10, 10, 15, 0.95);
-    z-index: 9000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    pointer-events: all;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-}
-
-.night-content {
-    text-align: center;
-    animation: popIn 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    padding: 2.5rem 2rem;
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(247, 118, 142, 0.3);
-    border-radius: 20px;
-    width: 90%;
-    max-width: 400px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-}
-
-.night-content h2 {
-    margin-top: 0;
-    color: #c0caf5;
-    font-size: 1.5rem;
-}
-
-.target-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    margin-top: 2rem;
-    max-height: 50vh;
-    overflow-y: auto;
-}
-
-.target-btn {
-    background: rgba(247, 118, 142, 0.1);
-    border: 1px solid #f7768e;
-    color: #f7768e;
-    padding: 1rem;
-    border-radius: 12px;
-    font-size: 1.2rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: 0.2s;
-}
-
-.target-btn:hover {
-    background: #f7768e;
-    color: #111;
-}
-
-/* 占い師の選択状態（紫系ハイライト） */
-.target-btn.selected {
-    background: rgba(187, 154, 247, 0.3);
-    border-color: #bb9af7;
-    color: #bb9af7;
-    box-shadow: 0 0 12px rgba(187, 154, 247, 0.5);
-}
-
-/* =============================================
-   リザルト画面（勝敗発表）
-   ============================================= */
-.result-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: 19999;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    overflow-y: auto;
-    padding: 2rem 0;
-    box-sizing: border-box;
-}
-
-/* 市民勝利：明るい青緑の背景 */
-.result-overlay.citizen-win {
-    background: radial-gradient(ellipse at 50% 30%, rgba(115, 218, 202, 0.25) 0%, rgba(13, 33, 55, 0.97) 70%);
-}
-
-/* 人狼勝利：深紅の背景 */
-.result-overlay.wolf-win {
-    background: radial-gradient(ellipse at 50% 30%, rgba(247, 118, 142, 0.25) 0%, rgba(10, 0, 0, 0.97) 70%);
-}
-
-/* てるてる勝利：オレンジ・黄系の背景 */
-.result-overlay.teruteru-win {
-    background: radial-gradient(ellipse at 50% 30%, rgba(255, 199, 119, 0.25) 0%, rgba(30, 15, 5, 0.97) 70%);
-}
-
-.result-content {
-    width: 90%;
-    max-width: 480px;
-    text-align: center;
-    animation: resultEntrance 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
-.result-icon {
-    font-size: 5rem;
-    margin-bottom: 1rem;
-    display: block;
-    animation: floatIcon 3s ease-in-out infinite;
-}
-
-.result-title {
-    font-size: 2rem;
-    font-weight: 900;
-    letter-spacing: 3px;
-    line-height: 1.3;
-    text-shadow: 0 0 30px currentColor;
-    margin-bottom: 0.8rem;
-}
-
-/* 市民勝利タイトル */
-.result-title.citizen {
-    color: #73daca;
-}
-
-/* 人狼勝利タイトル */
-.result-title.wolf {
-    color: #f7768e;
-}
-
-/* てるてる勝利タイトル */
-.result-title.teruteru {
-    color: #ffc777;
-}
-
-.result-subtitle {
-    font-size: 1rem;
-    opacity: 0.7;
-    margin-bottom: 2rem;
-    font-weight: 400;
-}
-
-/* 答え合わせリスト */
-.result-reveal-card {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 20px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-}
-
-.result-reveal-card h3 {
-    margin: 0 0 1.2rem 0;
-    font-size: 1rem;
-    font-weight: 700;
-    opacity: 0.7;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-}
-
-.result-player-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
-    max-height: 320px;
-    overflow-y: auto;
-    padding-right: 0.3rem;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
-
-.result-player-list::-webkit-scrollbar {
-    width: 4px;
-}
-
-.result-player-list::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.result-player-list::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-}
-
-.result-player-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.8rem 1.2rem;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
-    font-size: 1rem;
-    font-weight: 700;
-}
-
-/* 人狼プレイヤーを強調 */
-.result-player-item.is-wolf {
-    border-color: rgba(247, 118, 142, 0.4);
-    background: rgba(247, 118, 142, 0.08);
-}
-
-.result-player-name {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: #c0caf5;
-}
-
-.result-player-name .dead-mark {
-    font-size: 0.75rem;
-    color: #888;
-    font-weight: 400;
-}
-
-.result-role-badge {
-    padding: 0.3rem 0.8rem;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 900;
-}
-
-/* 役職バッジの色分け */
-.role-badge-wolf {
-    background: rgba(247, 118, 142, 0.2);
-    border: 1px solid #f7768e;
-    color: #f7768e;
-}
-
-.role-badge-citizen {
-    background: rgba(158, 206, 106, 0.2);
-    border: 1px solid #9ece6a;
-    color: #9ece6a;
-}
-
-.role-badge-seer {
-    background: rgba(187, 154, 247, 0.2);
-    border: 1px solid #bb9af7;
-    color: #bb9af7;
-}
-
-.role-badge-medium {
-    background: rgba(255, 199, 119, 0.2);
-    border: 1px solid #ffc777;
-    color: #ffc777;
-}
-
-.role-badge-knight {
-    background: rgba(167, 139, 250, 0.2);
-    border: 1px solid #a78bfa;
-    color: #a78bfa;
-}
-
-.role-badge-teruteru {
-    background: rgba(125, 207, 255, 0.2);
-    border: 1px solid #7dcfff;
-    color: #7dcfff;
-}
-
-.role-badge-unknown {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #888;
-}
-
-/* GMのみ表示：ロビー戻りボタン */
-.btn-return-lobby {
-    width: 100%;
-    padding: 1.2rem;
-    font-size: 1.1rem;
-    font-weight: 900;
-    font-family: inherit;
-    border-radius: 16px;
-    border: none;
-    cursor: pointer;
-    background: linear-gradient(135deg, #ff9e64, #f7768e);
-    color: #111;
-    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 158, 100, 0.3);
-    transition: all 0.15s ease;
-    letter-spacing: 1px;
-}
-
-.btn-return-lobby:hover {
-    filter: brightness(1.1);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 0 rgba(0, 0, 0, 0.4), 0 0 30px rgba(255, 158, 100, 0.4);
-}
-
-.btn-return-lobby:active {
-    transform: translateY(6px);
-    box-shadow: 0 0px 0 rgba(0, 0, 0, 0.4);
-}
-
-/* =============================================
-   アニメーション
-   ============================================= */
-@keyframes pop {
-    0% {
-        transform: scale(1);
-    }
-
-    50% {
-        transform: scale(1.05);
-        color: var(--accent);
-        text-shadow: 0 0 40px var(--accent);
-    }
-
-    100% {
-        transform: scale(1);
-    }
-}
-
-@keyframes popIn {
-    0% {
-        transform: scale(0.5);
-        opacity: 0;
-    }
-
-    100% {
-        transform: scale(1);
-        opacity: 1;
-    }
-}
-
-@keyframes pulse {
-    0% {
-        opacity: 0.6;
-    }
-
-    50% {
-        opacity: 1;
-    }
-
-    100% {
-        opacity: 0.6;
-    }
-}
-
-@keyframes resultEntrance {
-    0% {
-        transform: scale(0.7) translateY(40px);
-        opacity: 0;
-    }
-
-    60% {
-        transform: scale(1.03) translateY(-5px);
-        opacity: 1;
-    }
-
-    100% {
-        transform: scale(1) translateY(0);
-        opacity: 1;
-    }
-}
-
-@keyframes floatIcon {
-
-    0%,
-    100% {
-        transform: translateY(0px);
-    }
-
-    50% {
-        transform: translateY(-10px);
-    }
-}
-
-@keyframes shimmer {
-    0% {
-        background-position: -200% center;
-    }
-
-    100% {
-        background-position: 200% center;
-    }
-}
-
-.update-anim {
-    animation: pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-/* =============================================
-   投票システム
-   ============================================= */
-
-/* 投票進捗カウンター */
-.vote-progress-area {
-    margin-top: 1.5rem;
-    padding: 1rem 1.2rem;
-    background: rgba(187, 154, 247, 0.1);
-    border: 1px solid rgba(187, 154, 247, 0.3);
-    border-radius: 16px;
-    text-align: center;
-    animation: popIn 0.4s ease;
-}
-
-.vote-progress-text {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #bb9af7;
-    margin-bottom: 0.7rem;
-    letter-spacing: 1px;
-}
-
-.vote-progress-bar {
-    width: 100%;
-    height: 8px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 99px;
-    overflow: hidden;
-}
-
-.vote-progress-fill {
-    height: 100%;
-    border-radius: 99px;
-    background: linear-gradient(90deg, #bb9af7, #7dcfff);
-    width: 0%;
-    transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-    box-shadow: 0 0 8px rgba(187, 154, 247, 0.6);
-}
-
-/* 投票アクションオーバーレイ */
-.vote-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(20, 15, 40, 0.95);
-    z-index: 9100;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    pointer-events: all;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-}
-
-/* 投票ボタン：紫系（夜の赤と区別） */
-.vote-overlay .target-btn {
-    background: rgba(187, 154, 247, 0.1);
-    border: 1px solid #bb9af7;
-    color: #bb9af7;
-}
-
-.vote-overlay .target-btn:hover {
-    background: #bb9af7;
-    color: #111;
-}
-
-/* GM専用：投票締め切りボタン */
-.btn-vote-close {
-    background: rgba(187, 154, 247, 0.15) !important;
-    border-color: rgba(187, 154, 247, 0.4) !important;
-    color: #bb9af7 !important;
-}
-
-.btn-vote-close:hover {
-    background: #bb9af7 !important;
-    color: #111 !important;
-}
-
-/* =============================================
-   投票結果オーバーレイ（追放発表・答え合わせ）
-   ============================================= */
-.vote-result-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: 15000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: radial-gradient(ellipse at 50% 20%, rgba(247, 118, 142, 0.2) 0%, rgba(10, 5, 20, 0.97) 70%);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    overflow-y: auto;
-    padding: 2rem 0;
-    box-sizing: border-box;
-}
-
-.vote-result-content {
-    width: 90%;
-    max-width: 460px;
-    text-align: center;
-    animation: resultEntrance 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
-/* 追放発表ラベル */
-.vote-result-exile {
-    font-size: 1.8rem;
-    font-weight: 900;
-    color: #f7768e;
-    text-shadow: 0 0 25px rgba(247, 118, 142, 0.6);
-    margin-bottom: 0.5rem;
-    letter-spacing: 2px;
-    line-height: 1.4;
-}
-
-/* 投票結果タイトル */
-.vote-result-title {
-    font-size: 1rem;
-    font-weight: 700;
-    opacity: 0.5;
-    margin-bottom: 1.2rem;
-    letter-spacing: 3px;
-}
-
-/* 投票ログリスト */
-.vote-result-list {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
-    padding: 1rem;
-    margin-bottom: 1.2rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    max-height: 45vh;
-    overflow-y: auto;
-    text-align: left;
-}
-
-/* 投票ログ1行 */
-.vote-log-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.6rem 0.8rem;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.04);
-    font-size: 0.9rem;
-    font-weight: 700;
-    animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
-    color: #c0caf5;
-}
-
-.vote-log-item .voter {
-    color: #7dcfff;
-    flex-shrink: 0;
-}
-
-.vote-log-item .arrow {
-    opacity: 0.5;
-    flex-shrink: 0;
-}
-
-.vote-log-item .target {
-    color: #f7768e;
-    font-weight: 900;
-}
-
-.vote-log-item .abstain {
-    color: #888;
-    font-weight: 400;
-    font-style: italic;
-}
-
-/* カウントダウン表示 */
-.vote-countdown {
-    font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.4);
-    margin-bottom: 1rem;
-    font-weight: 700;
-    animation: pulse 1s infinite;
-}
-
-/* GM専用：夜フェーズへ進むボタン */
-.btn-next-night {
-    width: 100%;
-    padding: 1.2rem;
-    font-size: 1.1rem;
-    font-weight: 900;
-    font-family: inherit;
-    border-radius: 16px;
-    border: none;
-    cursor: pointer;
-    background: linear-gradient(135deg, #7aa2f7, #bb9af7);
-    color: #111;
-    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(122, 162, 247, 0.3);
-    transition: all 0.15s ease;
-    letter-spacing: 1px;
-}
-
-.btn-next-night:hover {
-    filter: brightness(1.1);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 0 rgba(0, 0, 0, 0.4), 0 0 30px rgba(122, 162, 247, 0.4);
-}
-
-.btn-next-night:active {
-    transform: translateY(6px);
-    box-shadow: 0 0px 0 rgba(0, 0, 0, 0.4);
-}
-
-@keyframes countdownPulse {
-
-    0%,
-    100% {
-        transform: scale(1);
-        opacity: 0.6;
-    }
-
-    50% {
-        transform: scale(1.05);
-        opacity: 1;
-    }
-}
-
-
-/* --------- ヘルプモーダル・ルールブック --------- */
-
-/* 📖 役職・ルール確認ボタン */
-.help-rules-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: var(--accent);
-    padding: 0.5rem 1rem;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    margin-top: 0.5rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-}
-
-.help-rules-btn:hover {
-    background: var(--accent);
-    color: #111;
-    box-shadow: 0 0 10px rgba(187, 154, 247, 0.3);
-}
-
-/* モーダルオーバーレイ */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(10, 10, 15, 0.8);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    z-index: 20000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-/* モーダルコンテンツ */
-.modal-content {
-    background: rgba(20, 20, 30, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 24px;
-    width: 90%;
-    max-width: 460px;
-    max-height: 80vh;
-    overflow-y: auto;
-    padding: 2rem;
-    position: relative;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-    animation: popIn 0.3s ease-out;
-}
-
-/* 閉じるボタン */
-.modal-close {
-    position: absolute;
-    top: 1rem;
-    right: 1.5rem;
-    font-size: 2rem;
-    color: rgba(255, 255, 255, 0.5);
-    cursor: pointer;
-    transition: color 0.2s;
-}
-
-.modal-close:hover {
-    color: #f7768e;
-}
-
-.modal-title {
-    margin: 0 0 1.5rem 0;
-    font-size: 1.4rem;
-    text-align: center;
-    color: #c0caf5;
-}
-
-/* 自分の役職説明 */
-.my-role-help {
-    background: rgba(187, 154, 247, 0.08);
-    border: 1px solid rgba(187, 154, 247, 0.2);
-    border-radius: 16px;
-    padding: 1.2rem;
-    margin-bottom: 2rem;
-    text-align: left;
-}
-
-.my-role-help h3 {
-    margin: 0 0 1rem 0;
-    font-size: 1.05rem;
-    color: var(--accent);
-}
-
-.role-help-card {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-}
-
-.role-help-badge-row {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    margin-bottom: 0.4rem;
-}
-
-.role-badge-large {
-    padding: 0.4rem 1rem;
-    border-radius: 20px;
-    font-weight: 900;
-    font-size: 1rem;
-}
-
-.faction-badge {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #c0caf5;
-    padding: 0.2rem 0.6rem;
-    font-size: 0.8rem;
-    border-radius: 8px;
-    font-weight: 700;
-}
-
-.role-help-summary,
-.role-help-details,
-.role-help-win {
-    font-size: 0.9rem;
-    margin: 0;
-    line-height: 1.4;
-    color: #a9b1d6;
-}
-
-.role-help-summary strong,
-.role-help-details strong,
-.role-help-win strong {
-    color: #c0caf5;
-}
-
-/* アコーディオン */
-.all-roles-help h3 {
-    margin: 0 0 1rem 0;
-    font-size: 1.05rem;
-    color: #c0caf5;
-    opacity: 0.8;
-    text-align: left;
-}
-
-.accordion-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-}
-
-.accordion-item {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
-    overflow: hidden;
-}
-
-.accordion-header {
-    padding: 1rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    font-weight: 700;
-    transition: background 0.2s;
-    user-select: none;
-}
-
-.accordion-header:hover {
-    background: rgba(255, 255, 255, 0.06);
-}
-
-.accordion-header.active {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    background: rgba(255, 255, 255, 0.04);
-}
-
-.accordion-badge {
-    padding: 0.2rem 0.6rem;
-    font-size: 0.75rem;
-    border-radius: 20px;
-    font-weight: 700;
-}
-
-.accordion-body {
-    padding: 1.2rem;
-    text-align: left;
-    background: rgba(0, 0, 0, 0.15);
-    animation: fadeIn 0.2s ease;
-}
-
-.role-help-body-content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-}
-
-.role-help-body-content p {
-    font-size: 0.85rem;
-    margin: 0;
-    line-height: 1.4;
-    color: #a9b1d6;
-}
-
-.role-help-body-content p strong {
-    color: #c0caf5;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
-
-/* GM用ℹ️ボタン */
-.info-icon-btn {
-    transition: transform 0.2s;
-}
-
-.info-icon-btn:hover {
-    transform: scale(1.2);
-    filter: brightness(1.2);
-}
-
-/* =============================================
-   考察メモ・3カラムレイアウト用スタイル
-   ============================================= */
-
-/* 3カラムゲームレイアウト */
-.game-layout {
-    display: grid;
-    grid-template-columns: minmax(180px, 240px) minmax(320px, 800px) minmax(180px, 240px);
-    justify-content: center;
-    gap: 1.5rem;
-    width: 100%;
-    max-width: 1350px;
-    margin: 0 auto;
-    align-items: stretch;
-    /* stretchにして高さを引き揃える */
-    z-index: 10;
-    padding: 4rem 1.5rem;
-    box-sizing: border-box;
-}
-
-/* PC大画面時の高さを680pxに統一 */
-.left-sidebar,
-.right-sidebar,
-.game-layout .main-content {
-    height: 680px;
-    box-sizing: border-box;
-}
-
-/* 中央メインコンテンツ（適度な幅をキープし、絶対に押しつぶされない） */
-.game-layout .main-content {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-    width: 100%;
-    max-width: 800px;
-    min-width: 320px;
-    margin: 0 auto;
-    flex-shrink: 0;
-}
-
-/* メインコンテンツ内のカードを縦に引き伸ばし、内部を上下中央寄せにする */
-.game-layout .main-content>.card {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    box-sizing: border-box;
-}
-
-/* サイドバー（ガラスモルフィズム） */
-.sidebar {
-    background: var(--card-bg);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--border-color);
-    border-radius: 24px;
-    padding: 1.5rem;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    color: var(--text-color);
-    max-height: 85vh;
-    overflow-y: auto;
-    transition: all 0.3s ease;
-}
-
-/* サイドバーヘッダー */
-.sidebar-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    border-bottom: 1px dashed var(--border-color);
-    padding-bottom: 0.5rem;
-}
-
-.sidebar-header h3 {
-    margin: 0;
-    font-size: 1.1rem;
-    font-weight: 700;
-}
-
-/* サイドバーヘッダーのアクションボタン群 */
-.sidebar-header-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-}
-
-/* 🗑 メモリセットボタン */
-.reset-memos-btn {
-    background: transparent;
-    border: 1px solid rgba(247, 118, 142, 0.4);
-    color: rgba(247, 118, 142, 0.8);
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 0.2rem 0.55rem;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-}
-
-.reset-memos-btn:hover {
-    background: rgba(247, 118, 142, 0.15);
-    color: #f7768e;
-    border-color: #f7768e;
-}
-
-/* スマホ用閉じるボタン */
-.close-memo-btn {
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 1.8rem;
-    font-weight: 700;
-    cursor: pointer;
-    line-height: 1;
-    padding: 0 0.5rem;
-    display: none;
-    /* デフォルト非表示 */
-    transition: color 0.2s;
-}
-
-.close-memo-btn:hover {
-    color: #fff;
-}
-
-/* スマホ用メモ開閉ボタン */
-.toggle-memo-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #ff9e64;
-    padding: 0.5rem 1rem;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    margin-top: 0.5rem;
-    display: none;
-    /* デフォルト非表示 */
-    align-items: center;
-    gap: 0.3rem;
-}
-
-.toggle-memo-btn:hover {
-    background: #ff9e64;
-    color: #111;
-    box-shadow: 0 0 10px rgba(255, 158, 100, 0.3);
-}
-
-/* メモプレイヤーリスト */
-.memo-player-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    text-align: left;
-}
-
-/* メモアイテム */
-.memo-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    padding: 0.8rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
-    transition: opacity 0.3s, background 0.3s;
-}
-
-.memo-player-name {
-    font-weight: 700;
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    color: #c0caf5;
-}
-
-/* 死亡プレイヤーのメモ装飾 */
-.memo-item.dead {
-    opacity: 0.5;
-    background: rgba(0, 0, 0, 0.2);
-    border-color: rgba(255, 255, 255, 0.02);
-}
-
-.memo-item.dead .memo-player-name {
-    text-decoration: line-through;
-    color: #888;
-}
-
-.memo-item.dead .memo-player-name::after {
-    content: " (死亡)";
-    font-size: 0.75rem;
-    color: #f7768e;
-    text-decoration: none;
-    display: inline-block;
-}
-
-/* メモ用テキストエリア */
-.memo-textarea {
-    width: 100%;
-    min-height: 60px;
-    box-sizing: border-box;
-    padding: 0.5rem 0.7rem;
-    font-size: 0.85rem;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.25);
-    color: #fff;
-    resize: vertical;
-    outline: none;
-    transition: border-color 0.3s, box-shadow 0.3s, background-color 0.3s;
-    font-family: inherit;
-    line-height: 1.4;
-}
-
-.memo-textarea:focus {
+/* 一致：アクセント色の実線／不一致：破線＋薄い文字 */
+.total-info.total-ok {
     border-color: var(--accent);
-    background: rgba(0, 0, 0, 0.4);
-    box-shadow: 0 0 8px rgba(122, 162, 247, 0.3);
 }
 
-/* 右サイドバーのプレースホルダー */
-.right-sidebar {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 200px;
-    border: 1px dashed var(--border-color);
-    background: rgba(255, 255, 255, 0.01);
+.total-info.total-error {
+    border-style: dashed;
+    color: var(--text-dim);
 }
-
-.sidebar-placeholder {
-    text-align: center;
-    opacity: 0.4;
-    user-select: none;
-}
-
-.sidebar-placeholder h4 {
-    margin: 0 0 0.5rem 0;
-    font-size: 0.95rem;
-    color: var(--accent);
-}
-
-.sidebar-placeholder p {
-    font-size: 0.75rem;
-    margin: 0;
-}
-
-/* =============================================
-   レスポンシブデザイン（サイドバー）
-   ============================================= */
-
-/* タブレットサイズ：右サイドバー自動非表示、2カラム化 */
-@media (max-width: 1024px) {
-    .game-layout {
-        grid-template-columns: minmax(180px, 240px) minmax(320px, 800px);
-        height: auto;
-        /* 高さを自動に戻す */
-    }
-
-    .left-sidebar,
-    .right-sidebar,
-    .game-layout .main-content {
-        height: auto;
-        /* 高さを自動に戻す */
-    }
-
-    .game-layout .main-content>.card {
-        flex: none;
-        /* 自動縦伸びを解除 */
-    }
-
-    .right-sidebar {
-        display: none !important;
-    }
-}
-
-/* スマホサイズ：1カラム、左サイドバーをドロワー(ポップアップ)化 */
-@media (max-width: 768px) {
-    .game-layout {
-        display: block;
-        /* flex/gridによるスタッキングコンテキスト発生を防ぐため block に変更 */
-        padding: 2.2rem 0;
-        z-index: auto !important;
-    }
-
-    .game-layout .main-content {
-        max-width: 100% !important;
-        /* スマホでは画面いっぱいにどっしりと表示 */
-        width: calc(100% - 2rem);
-        padding: 0;
-        box-sizing: border-box;
-        margin: 0 auto;
-        min-width: 0;
-        /* スマホでは画面サイズに合わせてさらに縮小できるように */
-    }
-
-    /* 左サイドバーを通常時非表示にし、スペースを占有させない */
-    .left-sidebar {
-        display: none !important;
-        /* スマホの通常時は完全に非表示にして見えない壁を完全排除 */
-        position: fixed;
-        top: 0;
-        left: -320px;
-        /* 画面の左外に隠す */
-        width: 300px;
-        height: 100vh;
-        max-height: 100vh;
-        border-radius: 0 24px 24px 0;
-        z-index: 21000 !important;
-        /* 暗幕オーバーレイ(20500)より手前に配置 */
-        box-sizing: border-box;
-        transition: left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-        box-shadow: 5px 0 25px rgba(0, 0, 0, 0.6);
-        background: rgba(20, 20, 30, 0.95);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border-right: 1px solid var(--border-color);
-        border-top: none;
-        border-bottom: none;
-        border-left: none;
-    }
-
-    /* ドロワー表示中のクラス */
-    .left-sidebar.show-mobile {
-        display: block !important;
-        /* ドロワーを開いたときだけ表示 */
-        left: 0;
-    }
-
-    /* スマホ用カードパディング（適度な広さを保ちつつ窮屈さを防ぐ） */
-    .card {
-        padding: 2.2rem 1.5rem !important;
-    }
-
-    /* スマホ用メインカードの最小高さと配置調整（縦潰れを防ぎ、中身を中央寄せにする） */
-    .game-layout .main-content>.card {
-        min-height: 500px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        box-sizing: border-box;
-    }
-
-    /* スマホ表示時は閉じるボタンとトグルボタンを表示 */
-    .close-memo-btn {
-        display: block;
-    }
-
-    .toggle-memo-btn {
-        display: inline-flex !important;
-    }
-
-    /* ドロワー開閉時の背面タップで閉じるための暗幕オーバーレイが欲しい場合用の定義（JSで制御） */
-    .memo-mobile-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: 20500;
-        backdrop-filter: blur(2px);
-        -webkit-backdrop-filter: blur(2px);
-        transition: opacity 0.3s ease;
-    }
-}
-
-/* =============================================
-   🐺 人狼チャット用スタイル
-   ============================================= */
-.chat-msg {
-    display: flex;
-    flex-direction: column;
-    padding: 0.8rem;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.chat-msg.is-gm {
-    border-left: 4px solid var(--btn-gm);
-    background: rgba(255, 158, 100, 0.05);
-}
-
-.chat-msg.is-wolf {
-    border-left: 4px solid #f7768e;
-    background: rgba(247, 118, 142, 0.05);
-}
-
-.chat-msg-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.8rem;
-    font-weight: 700;
-    margin-bottom: 0.3rem;
-}
-
-.chat-msg-sender {
-    color: #c0caf5;
-}
-
-.chat-msg.is-gm .chat-msg-sender {
-    color: #ff9e64;
-    /* GMはオレンジ */
-}
-
-.chat-msg.is-wolf .chat-msg-sender {
-    color: #f7768e;
-    /* 人狼は赤ピンク */
-}
-
-.chat-msg-time {
-    color: rgba(255, 255, 255, 0.3);
-    font-weight: 400;
-    font-size: 0.75rem;
-}
-
-.chat-msg-body {
-    font-size: 0.9rem;
-    color: #c0caf5;
-    line-height: 1.4;
-    white-space: pre-wrap;
-    word-break: break-all;
-}
-
-/* =============================================
-   📅 タイムスケジュール・タイムライン用スタイル
-   ============================================= */
-.timeline-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-    padding-right: 0.3rem;
-    box-sizing: border-box;
-}
-
-/* スクロールバーのカスタマイズ */
-.timeline-list::-webkit-scrollbar {
-    width: 6px;
-}
-
-.timeline-list::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.02);
-    border-radius: 3px;
-}
-
-.timeline-list::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
-}
-
-.timeline-list::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.timeline-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    padding: 0.8rem;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
-    transition: all 0.3s ease;
-    text-align: left;
-}
-
-/* 過去のステップ */
-.timeline-item.is-past {
-    opacity: 0.4;
-    background: rgba(0, 0, 0, 0.1);
-}
-
-/* 現在のステップ (ハイライト) */
-.timeline-item.is-current {
-    background: rgba(122, 162, 247, 0.12);
-    border-color: var(--accent);
-    box-shadow: 0 0 12px rgba(122, 162, 247, 0.2);
-    transform: scale(1.02);
-}
-
-/* 未来のステップ */
-.timeline-item.is-future {
-    opacity: 0.85;
-}
-
-.timeline-period-badge {
-    align-self: flex-start;
-    padding: 0.25rem 0.6rem;
-    font-size: 0.75rem;
-    border-radius: 8px;
-    font-weight: 700;
-    background: rgba(255, 255, 255, 0.08);
-    color: #c0caf5;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* 現在のステップのバッジ */
-.timeline-item.is-current .timeline-period-badge {
-    background: rgba(122, 162, 247, 0.2);
-    color: var(--accent);
-    border-color: rgba(122, 162, 247, 0.4);
-}
-
-.timeline-label-text {
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: #c0caf5;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-}
-
-.timeline-item.is-current .timeline-label-text {
-    color: #fff;
-    font-size: 0.95rem;
-}
-
-/* =============================================
-   🔒 シークレット投票トグルスイッチ
-   ============================================= */
 
 .secret-vote-row {
     display: flex;
-    align-items: center;
     justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
     margin-top: 1rem;
-    padding: 0.75rem 1rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 12px;
-    gap: 0.8rem;
 }
 
 .secret-vote-label {
-    font-size: 0.88rem;
-    color: rgba(255, 255, 255, 0.75);
-    line-height: 1.4;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.9rem;
 }
 
-/* トグルスイッチ外枠 */
 .toggle-switch {
     position: relative;
-    display: inline-block;
-    width: 48px;
+    width: 46px;
     height: 26px;
     flex-shrink: 0;
-    cursor: pointer;
 }
 
 .toggle-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-    position: absolute;
-}
-
-/* トラック（背景部分） */
-.toggle-slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 26px;
-    transition: background 0.25s ease, border-color 0.25s ease;
-}
-
-/* ノブ（丸い部分） */
-.toggle-slider::before {
-    position: absolute;
-    content: "";
-    height: 20px;
-    width: 20px;
-    left: 3px;
-    bottom: 2px;
-    background: rgba(255, 255, 255, 0.45);
-    border-radius: 50%;
-    transition: transform 0.25s ease, background 0.25s ease;
-}
-
-/* チェック時：ON状態 */
-.toggle-switch input:checked+.toggle-slider {
-    background: rgba(255, 158, 100, 0.35);
-    border-color: rgba(255, 158, 100, 0.55);
-}
-
-.toggle-switch input:checked+.toggle-slider::before {
-    transform: translateX(22px);
-    background: #ff9e64;
-    box-shadow: 0 0 8px rgba(255, 158, 100, 0.5);
-}
-
-/* =============================================
-   👁️ 役職覗き見防止（タップで表示カバー）
-   ============================================= */
-
-.role-reveal-wrapper {
-    position: relative;
-    cursor: pointer;
-    border-radius: 12px;
-    overflow: hidden;
-    min-height: 3.4rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-top: 0.15rem;
-}
-
-/* 未表示時：役職名をぼかす */
-.role-reveal-wrapper:not(.is-revealed) #my-role-name {
-    filter: blur(10px);
-    user-select: none;
-    pointer-events: none;
-}
-
-/* 表示時：ブラーを解除 */
-.role-reveal-wrapper.is-revealed #my-role-name {
-    filter: none;
-    transition: filter 0.25s ease;
-}
-
-/* カバーオーバーレイ本体 */
-.role-cover {
     position: absolute;
     inset: 0;
-    background: rgba(8, 8, 18, 0.84);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    opacity: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.toggle-slider {
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--surface);
+    pointer-events: none;
+    transition: background-color 0.2s ease;
+}
+
+.toggle-slider::before {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    background: var(--text-dim);
+    transition: transform 0.2s ease;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(20px);
+    background: var(--on-accent);
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* 参加中のプレイヤー（小さな名前カード） */
+.player-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+}
+
+.player-item {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 0.22rem;
-    border-radius: 12px;
-    border: 1px dashed rgba(255, 255, 255, 0.16);
-    transition: opacity 0.28s ease, transform 0.28s ease;
-    z-index: 5;
-}
-
-/* 表示中はカバーをフェードアウト */
-.role-reveal-wrapper.is-revealed .role-cover {
-    opacity: 0;
-    pointer-events: none;
-    transform: scale(1.04);
-}
-
-.role-cover-icon {
-    font-size: 1.35rem;
-    line-height: 1;
-}
-
-.role-cover-text {
-    font-size: 0.82rem;
+    gap: 0.4rem;
+    padding: 0.8rem 0.6rem;
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: var(--r-card);
+    box-shadow: var(--card-frame), var(--shadow-card);
+    font-family: var(--font-display);
     font-weight: 700;
-    color: rgba(255, 255, 255, 0.88);
-    letter-spacing: 0.02em;
+    text-align: center;
+    overflow-wrap: anywhere;
 }
 
-.role-cover-sub {
-    font-size: 0.67rem;
-    color: rgba(255, 255, 255, 0.35);
+.player-item.dead {
+    background: transparent;
+    color: var(--text-dim);
+    box-shadow: none;
+    border: 1.5px dashed var(--line);
 }
 
-/* =============================================
-   🌙 GM用夜フェーズ行動状況インジケーター
-   ============================================= */
+.player-item-actions {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
 
+.btn-kill,
+.btn-kick {
+    background: transparent;
+    border: 1px solid var(--ink-line);
+    border-radius: var(--r-ctl);
+    color: var(--ink);
+    padding: 0.15rem 0.55rem;
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 0.76rem;
+    cursor: pointer;
+}
+
+.btn-kill:hover,
+.btn-kick:hover {
+    background: var(--ink-wash);
+}
+
+.player-item.dead .btn-kick {
+    color: var(--text);
+    border-color: var(--line);
+}
+
+.badge-dead {
+    font-family: var(--font-body);
+    font-size: 0.74rem;
+    color: inherit;
+    padding: 0.05rem 0.45rem;
+    border: 1px dashed currentColor;
+    border-radius: var(--r-ctl);
+}
+
+.gm-hint {
+    color: var(--text-dim);
+    font-size: 0.88rem;
+    margin-bottom: 0.6rem;
+}
+
+/* GM 用：夜の行動状況 */
 .night-action-status {
-    margin-bottom: 0.75rem;
-    padding: 0.75rem 0.9rem;
-    background: rgba(122, 162, 247, 0.04);
-    border: 1px solid rgba(122, 162, 247, 0.15);
-    border-radius: 12px;
-    text-align: left;
+    margin-bottom: 1rem;
 }
 
 .night-status-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
 }
 
 .night-status-title {
-    font-size: 0.82rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     font-weight: 700;
-    color: #7aa2f7;
 }
 
 .night-status-count {
-    font-size: 0.77rem;
-    color: rgba(255, 255, 255, 0.42);
-}
-
-.night-status-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
+    color: var(--text-dim);
+    font-size: 0.85rem;
 }
 
 .night-status-item {
-    display: flex;
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    gap: 0.6rem;
     align-items: center;
-    gap: 0.45rem;
-    font-size: 0.79rem;
-    padding: 0.2rem 0.35rem;
-    border-radius: 6px;
-    transition: background 0.2s;
-}
-
-.night-status-item.pending {
-    background: rgba(247, 118, 142, 0.07);
-}
-
-.night-status-item.acted {
-    opacity: 0.58;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.9rem;
 }
 
 .night-status-icon {
-    width: 1.2rem;
-    text-align: center;
-    font-size: 0.84rem;
-    flex-shrink: 0;
+    display: flex;
 }
 
-.night-status-name {
-    color: #c0caf5;
-    font-weight: 700;
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.night-status-item.acted .night-status-icon {
+    color: var(--accent);
+}
+
+.night-status-item.pending {
+    color: var(--text-dim);
 }
 
 .night-status-role {
-    color: rgba(255, 255, 255, 0.36);
-    font-size: 0.72rem;
-    font-style: italic;
-    flex-shrink: 0;
-}
-
-/* =============================================
-   幽霊観戦モード（神視点UI）
-   ============================================= */
-
-/* 死亡時に常時表示されるバナー */
-.ghost-spectator-banner {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 9999;
-    background: linear-gradient(90deg, rgba(100, 50, 180, 0.95), rgba(60, 20, 120, 0.95));
-    color: #e0d0ff;
-    font-size: 0.88rem;
-    font-weight: 700;
-    text-align: center;
-    padding: 0.55rem 1rem;
-    letter-spacing: 0.04em;
-    backdrop-filter: blur(8px);
-    border-bottom: 1px solid rgba(180, 130, 255, 0.35);
-    box-shadow: 0 2px 16px rgba(100, 50, 200, 0.35);
-    animation: ghost-banner-in 0.5s ease;
-}
-
-@keyframes ghost-banner-in {
-    from {
-        opacity: 0;
-        transform: translateY(-100%);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.ghost-spectator-banner #ghost-spectator-label {
-    color: #c9b8ff;
-    font-weight: 400;
-}
-
-/* 神視点パネル共通 */
-.ghost-spectator-panel {
-    position: fixed;
-    bottom: 1.5rem;
-    right: 1rem;
-    z-index: 9990;
-    width: min(340px, 92vw);
-    background: rgba(20, 10, 50, 0.92);
-    border: 1px solid rgba(160, 100, 255, 0.4);
-    border-radius: 14px;
-    padding: 1rem 1.1rem;
-    backdrop-filter: blur(12px);
-    box-shadow: 0 8px 32px rgba(80, 0, 200, 0.25);
-    animation: ghost-panel-in 0.4s ease;
-    max-height: 55vh;
-    overflow-y: auto;
-}
-
-/* 神視点役職リストパネルは夜行動パネルの上に重ならないようオフセット */
-#ghost-role-list-panel {
-    bottom: calc(1.5rem + 200px);
-}
-
-/* パネルが両方あるとき縦に並ぶよう調整（JSで動的切り替えするため、片方のみ表示） */
-
-@keyframes ghost-panel-in {
-    from {
-        opacity: 0;
-        transform: translateY(20px) scale(0.97);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-.ghost-panel-title {
-    color: #bb9af7;
+    color: var(--text-dim);
     font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    margin-bottom: 0.65rem;
-    padding-bottom: 0.4rem;
-    border-bottom: 1px solid rgba(160, 100, 255, 0.25);
 }
 
-/* 夜の行動リスト */
-.ghost-night-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
-}
-
-.ghost-night-action-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: rgba(255, 255, 255, 0.04);
-    border-radius: 8px;
-    padding: 0.4rem 0.6rem;
-    font-size: 0.82rem;
-    color: #c0caf5;
-    animation: ghost-item-in 0.3s ease both;
-}
-
-@keyframes ghost-item-in {
-    from {
-        opacity: 0;
-        transform: translateX(10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-.ghost-night-action-item .gna-role {
-    font-size: 0.72rem;
-    color: rgba(255, 255, 255, 0.4);
-    font-style: italic;
-    min-width: 3rem;
-    flex-shrink: 0;
-}
-
-.ghost-night-action-item .gna-actor {
-    font-weight: 700;
-    color: #7dcfff;
-    min-width: 4rem;
-    flex-shrink: 0;
-}
-
-.ghost-night-action-item .gna-arrow {
-    color: rgba(255, 255, 255, 0.3);
-    font-size: 0.75rem;
-    flex-shrink: 0;
-}
-
-.ghost-night-action-item .gna-target {
-    font-weight: 700;
-    color: #f7768e;
-}
-
-.ghost-night-action-item.no-action .gna-target {
-    color: rgba(255, 255, 255, 0.25);
-    font-weight: 400;
-    font-style: italic;
-}
-
-/* 役職一覧 */
-.ghost-role-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-}
-
-.ghost-role-item {
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    background: rgba(255, 255, 255, 0.04);
-    border-radius: 8px;
-    padding: 0.38rem 0.6rem;
-    font-size: 0.83rem;
-    animation: ghost-item-in 0.3s ease both;
-}
-
-.ghost-role-item .gri-name {
-    flex: 1;
-    color: #c0caf5;
-    font-weight: 600;
-}
-
-.ghost-role-item.is-dead .gri-name {
-    text-decoration: line-through;
-    color: rgba(192, 202, 245, 0.35);
-}
-
-.ghost-role-item .gri-badge {
-    font-size: 0.72rem;
-    padding: 0.15rem 0.45rem;
-    border-radius: 6px;
-    font-weight: 700;
-    flex-shrink: 0;
-}
-
-/* 神視点投票ログ（vote-result-overlay 内に追加される） */
-.ghost-vote-log-reveal {
-    margin-top: 1rem;
-    padding: 0.75rem 1rem;
-    background: rgba(100, 50, 180, 0.18);
-    border: 1px solid rgba(160, 100, 255, 0.3);
-    border-radius: 10px;
-}
-
-.ghost-vote-log-reveal-title {
-    font-size: 0.75rem;
-    color: #bb9af7;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    margin-bottom: 0.5rem;
-}
-
-/* =============================================
-   👻 霊界カメラ：視点切り替えヘッダー
-   ============================================= */
-
-/* 画面最上部に固定される霊界カメラバー */
-.ghost-camera-header {
+/* ---------- モーダル（役職・ルール確認、人狼チャット） ---------- */
+.modal-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 10000;  /* あらゆる画面の前面に出るよう最高値 */
-    background: linear-gradient(90deg, rgba(60, 0, 120, 0.97), rgba(30, 0, 70, 0.97));
-    border-bottom: 1px solid rgba(180, 80, 255, 0.4);
-    box-shadow: 0 3px 20px rgba(120, 0, 255, 0.3);
-    backdrop-filter: blur(12px);
-    padding: 0.5rem 1rem 0.6rem;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    padding: 48px 16px;
+    background: var(--scrim);
+}
+
+.modal-content {
+    position: relative;
+    width: min(560px, 100%);
+    margin: auto 0;
+    background: var(--modal-bg);
+    border: 1px solid var(--line);
+    border-radius: var(--r-panel);
+    box-shadow: var(--shadow-panel);
+    padding: 1.75rem;
+}
+
+.modal-wide {
+    width: min(640px, 100%);
+}
+
+.modal-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    color: var(--text);
+    cursor: pointer;
+}
+
+.modal-close:hover {
+    background: var(--surface);
+}
+
+.modal-title {
+    margin: 0 3rem 1.2rem 0;
+    font-size: 1.4rem;
+}
+
+.my-role-help,
+.all-roles-help {
+    margin-bottom: 1.4rem;
+}
+
+.my-role-help h3,
+.all-roles-help h3,
+.mission-box h3,
+.mission-form h3 {
+    margin: 0 0 0.6rem;
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: var(--text-dim);
+}
+
+.role-help-card {
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--r-panel);
+}
+
+.role-help-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 0.4rem;
+}
+
+.role-badge-large {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.35rem;
+}
+
+.faction-badge,
+.accordion-badge {
+    font-size: 0.74rem;
+    font-weight: 700;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    color: var(--text-dim);
+}
+
+.role-help-card p,
+.role-help-body-content p {
+    margin: 0.45rem 0;
+    font-size: 0.9rem;
+    line-height: 1.75;
+}
+
+.accordion-list {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
-    animation: ghost-camera-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    pointer-events: auto;  /* タップ・クリック必ず有効化 */
 }
 
-@keyframes ghost-camera-in {
-    from {
-        opacity: 0;
-        transform: translateY(-100%);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+.accordion-item {
+    border-bottom: 1px solid var(--line);
 }
 
-/* ヘッダータイトルテキスト */
-.ghost-camera-title {
-    font-size: 0.78rem;
+.accordion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0.3rem;
+    font-family: var(--font-display);
     font-weight: 700;
-    color: rgba(220, 180, 255, 0.85);
-    letter-spacing: 0.06em;
-    text-align: center;
-    line-height: 1;
+    cursor: pointer;
 }
 
-/* プレイヤー選択タブの横スクロールコンテナ */
+.accordion-header:hover,
+.accordion-header.active {
+    color: var(--accent);
+}
+
+.accordion-body {
+    padding: 0 0.3rem 0.8rem;
+}
+
+/* 人狼チャット */
+.mission-box {
+    border: 1px solid var(--accent);
+    border-radius: var(--r-panel);
+    padding: 0.9rem 1rem;
+    margin-bottom: 1.2rem;
+}
+
+.mission-text {
+    margin: 0;
+    font-weight: 700;
+    white-space: pre-wrap;
+}
+
+.mission-form {
+    margin-bottom: 1.2rem;
+}
+
+.chat-log {
+    height: 300px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+    padding: 0.9rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+}
+
+.chat-msg {
+    max-width: 85%;
+    align-self: flex-start;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+}
+
+/* GM の発言は右寄せ＋破線（色だけで区別しない） */
+.chat-msg.is-gm {
+    align-self: flex-end;
+    border-style: dashed;
+}
+
+.chat-msg-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: 0.74rem;
+    color: var(--text-dim);
+}
+
+.chat-msg-body {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* ---------- 幽霊モード ---------- */
+.ghost-camera-header {
+    grid-area: ghost;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1rem;
+    padding: 0.6rem 24px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+}
+
+.ghost-camera-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
 .ghost-camera-tabs {
     display: flex;
-    gap: 0.45rem;
-    overflow-x: auto;
-    padding-bottom: 0.1rem;
-    scrollbar-width: none;
+    flex-wrap: wrap;
+    gap: 0.4rem;
 }
 
-.ghost-camera-tabs::-webkit-scrollbar {
-    display: none;
-}
-
-/* 各プレイヤータブボタン */
 .ghost-camera-tab {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    flex-shrink: 0;
-    padding: 0.3rem 0.7rem;
-    border-radius: 20px;
-    border: 1px solid rgba(160, 80, 255, 0.35);
-    background: rgba(255, 255, 255, 0.05);
-    color: rgba(210, 180, 255, 0.75);
-    font-size: 0.8rem;
-    font-weight: 600;
+    gap: 0.4rem;
+    min-height: 34px;
+    padding: 0 0.65rem;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    color: var(--text);
+    font-size: 0.84rem;
     cursor: pointer;
-    transition: all 0.2s ease;
-    font-family: 'Noto Sans JP', sans-serif;
-    pointer-events: auto;  /* タップ・クリック必ず有効化 */
-    position: relative;
-    z-index: 10001;  /* ヘッダー内でも最前面 */
-}
-
-.ghost-camera-tab:hover {
-    background: rgba(160, 80, 255, 0.2);
-    border-color: rgba(180, 100, 255, 0.6);
-    color: #e0ccff;
-    transform: translateY(-1px);
 }
 
 .ghost-camera-tab.active {
-    background: linear-gradient(135deg, rgba(150, 60, 255, 0.7), rgba(100, 20, 200, 0.7));
-    border-color: rgba(200, 130, 255, 0.7);
-    color: #ffffff;
-    box-shadow: 0 2px 10px rgba(150, 60, 255, 0.4);
-    transform: translateY(-1px);
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-/* タブ内の役職バッジ */
-.ghost-camera-tab .gct-role {
-    font-size: 0.68rem;
-    padding: 0.1rem 0.38rem;
-    border-radius: 5px;
-    font-weight: 700;
+.gct-role {
+    color: var(--text-dim);
+    font-size: 0.74rem;
 }
 
-/* 生存者なしのメッセージ */
 .ghost-camera-no-alive {
-    color: rgba(200, 160, 255, 0.5);
-    font-size: 0.8rem;
-    padding: 0.3rem 0.5rem;
+    color: var(--text-dim);
+    font-size: 0.85rem;
 }
 
-/* 幽霊視点でのメインエリア上部余白（ヘッダー分） */
-body.ghost-camera-active .game-layout {
-    padding-top: calc(72px + env(safe-area-inset-top));
-}
-
-/* 霊界カメラ起動中は「あなたは死亡しました」全画面オーバーレイを強制非表示 */
-body.ghost-camera-active #ghost-mode-overlay {
-    display: none !important;
-    pointer-events: none !important;
-}
-
-/* ==============================
-   霊界視点：役職名の特別表示
-   ============================== */
-
-/* 幽霊視点で表示される役職名（カラーバッジ化） */
-.ghost-view-role {
-    font-size: 1.8rem;
-    padding: 0.3rem 1rem;
-    border-radius: 12px;
-    font-weight: 900;
-    display: inline-block;
-    letter-spacing: 0.04em;
-}
-
-/* 霊界視点情報テキスト（夜フェーズのターゲット確認） */
-.ghost-view-info {
-    margin-top: 1.2rem;
-    padding: 0.75rem 1rem;
-    background: rgba(100, 50, 200, 0.2);
-    border: 1px solid rgba(160, 100, 255, 0.4);
-    border-radius: 10px;
-    font-size: 0.88rem;
-    color: #c0caf5;
-    text-align: center;
-    line-height: 1.5;
-}
-
-/* 現在の選択ターゲット名ハイライト */
-.ghost-view-target-name {
-    color: #f7768e;
-    font-weight: 900;
-    font-size: 1.05em;
-}
-
-/* 幽霊視点の非活性ボタン（選択中を強調） */
-.ghost-view-btn {
-    opacity: 0.5;
-    cursor: not-allowed !important;
-    position: relative;
-}
-
-.ghost-view-btn.ghost-selected {
-    opacity: 1;
-    background: linear-gradient(135deg, rgba(247, 118, 142, 0.5), rgba(255, 158, 100, 0.5)) !important;
-    border-color: rgba(247, 118, 142, 0.8) !important;
-    color: #ffffff !important;
-    box-shadow: 0 0 12px rgba(247, 118, 142, 0.4);
-}
-
-/* =============================================
-   ⏭️ 投票スキップボタン
-   ============================================= */
-.vote-skip-btn {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px dashed rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.55);
-    border-radius: 12px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-family: 'Noto Sans JP', sans-serif;
-    letter-spacing: 0.02em;
-}
-
-.vote-skip-btn:hover {
-    background: rgba(255, 255, 255, 0.09);
-    border-color: rgba(255, 255, 255, 0.4);
-    color: rgba(255, 255, 255, 0.85);
-}
-
-.vote-skip-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-}
-
-/* =============================================
-   🌙 夜フェーズ：全員共通の選択パネル
-   役職が周りにバレないよう、見出し・色・ボタンは全パネルで同じにする
-   ============================================= */
-.night-panel {
-    border-color: rgba(122, 162, 247, 0.3);
-}
-
-.night-panel .night-panel-title {
-    color: #c0caf5;
-}
-
-.night-panel .night-question {
-    color: #c0caf5;
-    min-height: 1.5em;
-}
-
-.night-panel .night-picked {
-    color: rgba(192, 202, 245, 0.6);
-    font-size: 0.8rem;
-    margin-top: 0.4rem;
-}
-
-/* 死者の名前ボタン（全員の画面で同じ見た目） */
-.night-panel .target-btn.night-dead {
-    opacity: 0.45;
-    text-decoration: line-through;
-}
-
-.night-decide-btn,
-.night-decide-btn:hover {
-    margin-top: 1rem;
-    width: 100%;
-    background: linear-gradient(135deg, #7aa2f7, #bb9af7);
-    border-color: transparent;
-    color: #fff;
-}
-
-.night-decide-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-/* =============================================
-   ↻ 夜フェーズ：選び直しボタン
-   ============================================= */
-.change-night-target-btn {
-    margin-top: 1.1rem;
-    padding: 0.6rem 1.4rem;
-    background: rgba(122, 162, 247, 0.12);
-    border: 1px solid rgba(122, 162, 247, 0.4);
-    color: #7aa2f7;
-    border-radius: 10px;
-    font-size: 0.88rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-family: 'Noto Sans JP', sans-serif;
-    display: block;
-    width: 100%;
-}
-
-.change-night-target-btn:hover {
-    background: rgba(122, 162, 247, 0.25);
-    border-color: #7aa2f7;
-    color: #fff;
-    transform: translateY(-1px);
-}
-
-/* =============================================
-   🏆 リザルト大見出しバナー（最上部）
-   ============================================= */
-.result-winner-banner {
-    position: sticky;
-    top: 0;
-    width: 100%;
-    padding: 1.1rem 1rem 1rem;
-    text-align: center;
-    font-size: clamp(1.8rem, 6vw, 3rem);
-    font-weight: 900;
-    letter-spacing: 0.04em;
-    line-height: 1.2;
-    z-index: 10;
-    animation: resultBannerIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-@keyframes resultBannerIn {
-    from {
-        opacity: 0;
-        transform: scale(0.85) translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
-}
-
-/* 市民勝利バナー */
-.result-winner-banner.citizen-banner {
-    background: linear-gradient(135deg, rgba(115, 218, 202, 0.25), rgba(26, 75, 110, 0.6));
-    color: #73daca;
-    text-shadow: 0 0 30px rgba(115, 218, 202, 0.7), 0 2px 8px rgba(0,0,0,0.5);
-    border-bottom: 2px solid rgba(115, 218, 202, 0.4);
-}
-
-/* 人狼勝利バナー */
-.result-winner-banner.wolf-banner {
-    background: linear-gradient(135deg, rgba(247, 118, 142, 0.25), rgba(61, 0, 0, 0.6));
-    color: #f7768e;
-    text-shadow: 0 0 30px rgba(247, 118, 142, 0.7), 0 2px 8px rgba(0,0,0,0.5);
-    border-bottom: 2px solid rgba(247, 118, 142, 0.4);
-}
-
-/* てるてる勝利バナー */
-.result-winner-banner.teruteru-banner {
-    background: linear-gradient(135deg, rgba(255, 199, 119, 0.25), rgba(74, 47, 15, 0.6));
-    color: #ffc777;
-    text-shadow: 0 0 30px rgba(255, 199, 119, 0.7), 0 2px 8px rgba(0,0,0,0.5);
-    border-bottom: 2px solid rgba(255, 199, 119, 0.4);
-}
-/* =============================================
-   🌅 朝フェーズ：カードを縦1列・同じ幅に（役職でカードの枚数・並びが変わらないように）
-   ============================================= */
-.morning-stack {
-    flex-direction: column;
-    gap: 1rem;
-    overflow-y: auto;
-    padding: 1.5rem 0;
-    box-sizing: border-box;
-}
-
-/* 中身が画面より高いときも上が切れないよう、上下の余白で中央寄せする */
-.morning-stack > .morning-card:first-child {
-    margin-top: auto;
-}
-
-.morning-stack > .morning-card:last-child {
-    margin-bottom: auto;
-}
-
-.morning-card {
-    width: 90%;
-    max-width: 400px;
-    box-sizing: border-box;
-    flex-shrink: 0;
-}
-
-/* 🌙 あなたの結果（見出し・色は全員同じ。本文は3行分の高さを確保して、文言の長さで高さが変わりにくくする） */
-/* .night-content h2 より優先させる */
-.morning-card .my-result-title {
-    color: #7aa2f7;
-}
-
-.my-result-body {
-    color: #c0caf5;
-    font-size: 1rem;
-    line-height: 1.6;
-    min-height: 4.8em;
-    margin-top: 0.5rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-
-/* =============================================
-   🐺 役職カード内のボタン枠（全員同じ高さ。カバーが閉じている間は見えない）
-   ============================================= */
-.role-reveal-wrapper {
-    flex-direction: column;
-}
-
-.role-card-actions {
-    height: 2.6rem;
+.ghost-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 8000;
     display: flex;
     align-items: center;
     justify-content: center;
+    background: var(--scrim);
 }
 
-.role-card-actions .help-rules-btn {
-    margin-top: 0;
+.ghost-message {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 2rem;
+    text-align: center;
 }
 
-.role-reveal-wrapper:not(.is-revealed) .role-card-actions {
-    visibility: hidden;
+.ghost-message small {
+    display: block;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: var(--text-dim);
+}
+
+/* ---------- 画面幅 ---------- */
+@media (max-width: 1024px) {
+    .game-layout {
+        grid-template-columns: minmax(180px, 210px) minmax(0, 1fr) minmax(180px, 220px);
+    }
+
+    .target-list {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+/* スマホ：3列を縦に並べる（メイン → 考察メモ → タイムテーブル）、名前カードは3列 */
+@media (max-width: 768px) {
+    .game-layout {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "top"
+            "ghost"
+            "main"
+            "left"
+            "right";
+        grid-template-rows: auto;
+    }
+
+    .topbar {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.5rem 1rem;
+        padding: 0.7rem 16px;
+    }
+
+    .topbar-phase {
+        order: 3;
+        width: 100%;
+        justify-content: start;
+    }
+
+    .phase-name {
+        font-size: 1.6rem;
+    }
+
+    .ghost-camera-header {
+        padding: 0.6rem 16px;
+    }
+
+    .sidebar {
+        position: static;
+        max-height: none;
+        overflow: visible;
+        border-left: none;
+        border-right: none;
+        border-top: 1px solid var(--line);
+    }
+
+    .main-content {
+        padding: 1.2rem 16px 2rem;
+    }
+
+    .panel,
+    .overlay-panel,
+    .modal-content {
+        padding: 1.15rem;
+    }
+
+    .target-list {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .night-question {
+        font-size: 1.3rem;
+    }
+
+    .role-section {
+        gap: 1rem;
+    }
+
+    .role-reveal-wrapper {
+        width: 150px;
+    }
+
+    .result-title {
+        font-size: 2rem;
+    }
+
+    .gm-controls-row {
+        flex-wrap: wrap;
+    }
+}
+
+/* 動きを減らす設定：背景のフェードとカードの浮き上がりを止める */
+@media (prefers-reduced-motion: reduce) {
+    .table-light,
+    .target-btn,
+    .role-card-back,
+    .vote-progress-fill,
+    .toggle-slider,
+    .toggle-slider::before {
+        transition: none;
+    }
+
+    .target-btn:hover:not(:disabled),
+    .target-btn.selected,
+    .target-btn.selected:hover,
+    .target-btn.ghost-selected {
+        transform: none;
+    }
+
+    .role-reveal-wrapper.is-revealed .role-card-back {
+        transform: none;
+    }
+
+    .phase-name.update-anim {
+        animation: none;
+    }
 }

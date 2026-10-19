@@ -1,60 +1,140 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-palette="wine" data-light="night">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Supabase連携のリアルタイム人狼ゲーム管理アプリ。役職配布・フェーズ管理・勝敗判定をリアルタイムで同期。">
     <title>リアル人狼ゲーム管理</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- 配色はこの端末だけの設定。描画前に復元してちらつきを防ぐ（詳しい処理は js/theme.js） -->
+    <script>
+        try {
+            var savedPalette = localStorage.getItem('werewolf_palette');
+            if (['wine', 'felt', 'navy', 'ember'].indexOf(savedPalette) !== -1) {
+                document.documentElement.setAttribute('data-palette', savedPalette);
+            }
+        } catch (e) { /* 読めなければ wine のまま */ }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kaisei+Tokumin:wght@700;800&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 
-<body class="theme-waiting">
-    <div class="particles"></div>
+<body>
+    <!-- テーブル（フェルト）の照明。夜・朝・昼の3枚を重ね、data-light に合う1枚だけフェードで表示する -->
+    <div class="table-bg" aria-hidden="true">
+        <div class="table-light light-night"></div>
+        <div class="table-light light-morning"></div>
+        <div class="table-light light-day"></div>
+    </div>
+
+    <!-- アイコン（インラインSVG） -->
+    <svg class="icon-sprite" aria-hidden="true" focusable="false">
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" /></symbol>
+        <symbol id="i-sunrise" viewBox="0 0 24 24"><path d="M5 17a7 7 0 0 1 14 0" /><path d="M2 20h20" /><path d="M12 4v3M4.6 8.6l1.8 1.8M19.4 8.6l-1.8 1.8" /></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" /></symbol>
+        <symbol id="i-wolf" viewBox="0 0 24 24"><path d="M4 3l3.6 5h8.8L20 3l-.8 9-3.6 6.4L12 21l-3.6-2.6L4.8 12z" /><path d="M9.2 12.2h.01M14.8 12.2h.01" /><path d="M10.4 16.2L12 17.6l1.6-1.4" /></symbol>
+        <symbol id="i-house" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7" /><path d="M5 9.8V20h14V9.8" /><path d="M10 20v-6h4v6" /></symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></symbol>
+        <symbol id="i-candle" viewBox="0 0 24 24"><path d="M12 2.5c2 2.8 3 4.3 3 6.2a3 3 0 0 1-6 0c0-1.9 1-3.4 3-6.2z" /><rect x="8.5" y="13" width="7" height="8.5" rx="1" /></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.6 8-8 9-4.4-1-8-4-8-9V6z" /></symbol>
+        <symbol id="i-teru" viewBox="0 0 24 24"><circle cx="12" cy="8" r="5" /><path d="M8.2 11.6L5 21h14l-3.2-9.4" /><path d="M10.4 7.6h.01M13.6 7.6h.01" /></symbol>
+        <symbol id="i-question" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.7.3-1 .8-1 1.5V14" /><path d="M12 17.2h.01" /></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></symbol>
+        <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7.5h.01" /></symbol>
+        <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></symbol>
+        <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" /><path d="M4 20.5V5.5" /></symbol>
+        <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z" /></symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.4 5.7" /><path d="M20 4.5V11h-6.5" /></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="1.5" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></symbol>
+        <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l1-4L16 5l3 3L8 19z" /></symbol>
+    </svg>
+
+    <!-- 配色パネル（ログイン画面と上のバーの「配色」ボタンで共用） -->
+    <div id="palette-panel" class="palette-panel hidden" role="dialog" aria-label="テーブルの色">
+        <p class="palette-note">テーブルの色（自分の画面だけ変わります）</p>
+        <div class="palette-options" role="radiogroup" aria-label="配色">
+            <button type="button" class="palette-option" role="radio" aria-checked="false" data-palette-key="wine">
+                <span class="palette-swatch"></span><span class="palette-name">ワイン</span><span class="palette-accent"></span>
+            </button>
+            <button type="button" class="palette-option" role="radio" aria-checked="false" data-palette-key="felt">
+                <span class="palette-swatch"></span><span class="palette-name">深緑のフェルト</span><span class="palette-accent"></span>
+            </button>
+            <button type="button" class="palette-option" role="radio" aria-checked="false" data-palette-key="navy">
+                <span class="palette-swatch"></span><span class="palette-name">夜空の紺</span><span class="palette-accent"></span>
+            </button>
+            <button type="button" class="palette-option" role="radio" aria-checked="false" data-palette-key="ember">
+                <span class="palette-swatch"></span><span class="palette-name">炭と残り火</span><span class="palette-accent"></span>
+            </button>
+        </div>
+    </div>
 
     <!-- ログイン用のコンテナ -->
-    <div class="container" id="login-container">
+    <div class="login-container" id="login-container">
+        <button type="button" class="palette-btn login-palette-btn" data-palette-toggle aria-haspopup="dialog" aria-expanded="false">
+            <span class="palette-dots" aria-hidden="true"><i data-dot="wine"></i><i data-dot="felt"></i><i data-dot="navy"></i><i data-dot="ember"></i></span>配色
+        </button>
+
         <!-- ログイン画面 -->
-        <div id="login-view" class="card login-card">
-            <h1 class="login-title">WEREWOLF</h1>
-            <div class="input-group">
-                <input type="text" id="player-name" class="name-input" placeholder="なまえをいれてね" autocomplete="off"
-                    maxlength="15">
+        <div id="login-view" class="login-view">
+            <!-- 裏向きのカード2枚の上に、狼の絵柄のカードを重ねたイラスト -->
+            <div class="login-art" aria-hidden="true">
+                <div class="art-card art-back art-back-1"></div>
+                <div class="art-card art-back art-back-2"></div>
+                <div class="art-card art-face"><svg class="icon"><use href="#i-wolf" /></svg></div>
             </div>
-            <button class="login-btn btn-player" onclick="joinGame('player')">部屋に入る<br><span
-                    style="font-size:0.8rem; font-weight:400;">(プレイヤーとして参加)</span></button>
-            <button class="login-btn btn-gm" onclick="joinGame('gm')">部屋を作る<br><span
-                    style="font-size:0.8rem; font-weight:400;">(GMとして参加)</span></button>
-            <div style="margin-top: 1rem;">
-                <button onclick="clearSession()"
-                    style="background:transparent; border:none; color:rgba(255,255,255,0.4); text-decoration:underline; cursor:pointer;">ログイン情報をリセット</button>
-            </div>
+            <h1 class="login-title">人狼</h1>
+            <label class="visually-hidden" for="player-name">なまえ</label>
+            <input type="text" id="player-name" class="name-input login-input" placeholder="なまえをいれてね" autocomplete="off"
+                maxlength="15">
+            <button type="button" class="login-btn btn-primary" onclick="joinGame('player')">部屋に入る</button>
+            <button type="button" class="login-btn btn-secondary" onclick="joinGame('gm')">GMとして部屋を作る</button>
+            <button type="button" class="link-btn" onclick="clearSession()">ログイン情報をリセット</button>
         </div>
     </div>
 
-    <!-- ======================================
-         👻 霊界カメラヘッダー（死亡プレイヤーが視点を切り替えて覗き見するUI）
-         死亡時のみ表示。game-viewの直前に配置。
-         ====================================== -->
-    <div id="ghost-camera-header" class="ghost-camera-header hidden">
-        <div class="ghost-camera-title">👻 霊界カメラ：誰の視点を見る？</div>
-        <div id="ghost-camera-tabs" class="ghost-camera-tabs">
-            <!-- JSで生存者タブが動的に生成されます -->
-        </div>
-    </div>
-
-    <!-- メインゲーム画面（containerの外へ配置して3カラム化） -->
+    <!-- メインゲーム画面：上のバー＋3列（左：考察メモ／中央：メイン／右：タイムテーブル） -->
     <div id="game-view" class="hidden game-layout">
-        <!-- 左サイドバー：考察メモ -->
+        <!-- 上のバー -->
+        <header class="topbar">
+            <div class="topbar-brand">人狼</div>
+            <div class="topbar-phase">
+                <span class="light-icons" aria-hidden="true">
+                    <svg class="icon light-icon light-icon-night"><use href="#i-moon" /></svg>
+                    <svg class="icon light-icon light-icon-morning"><use href="#i-sunrise" /></svg>
+                    <svg class="icon light-icon light-icon-day"><use href="#i-sun" /></svg>
+                </span>
+                <div id="current-phase" class="phase-name">読込中...</div>
+                <div id="phase-sub" class="phase-sub"></div>
+            </div>
+            <div class="topbar-right">
+                <button type="button" class="palette-btn" data-palette-toggle aria-haspopup="dialog" aria-expanded="false">
+                    <span class="palette-dots" aria-hidden="true"><i data-dot="wine"></i><i data-dot="felt"></i><i data-dot="navy"></i><i data-dot="ember"></i></span>配色
+                </button>
+                <div id="gm-name-display" class="me-display hidden"></div>
+            </div>
+        </header>
+
+        <!-- 霊界カメラ（死亡プレイヤーが視点を切り替えて覗き見するUI）。死亡時のみ表示 -->
+        <div id="ghost-camera-header" class="ghost-camera-header hidden">
+            <div class="ghost-camera-title"><svg class="icon"><use href="#i-eye" /></svg>霊界カメラ：誰の視点を見る？</div>
+            <div id="ghost-camera-tabs" class="ghost-camera-tabs">
+                <!-- JSで生存者タブが動的に生成されます -->
+            </div>
+        </div>
+
+        <!-- 左の列：考察メモ -->
         <aside id="left-sidebar" class="sidebar left-sidebar">
             <div class="sidebar-header">
-                <h3>📝 考察メモ (プライベート)</h3>
+                <h3>考察メモ<span class="sidebar-sub">自分だけに見えます</span></h3>
                 <div class="sidebar-header-actions">
-                    <button type="button" id="btn-reset-memos" class="reset-memos-btn"
-                        onclick="resetMemos()">🗑 リセット</button>
-                    <button type="button" id="btn-close-memo" class="close-memo-btn"
-                        onclick="toggleMobileMemo()">×</button>
+                    <button type="button" id="btn-reset-memos" class="icon-text-btn" onclick="resetMemos()">
+                        <svg class="icon"><use href="#i-trash" /></svg>リセット</button>
+                    <button type="button" id="btn-close-memo" class="close-memo-btn" onclick="toggleMobileMemo()" aria-label="メモを閉じる">
+                        <svg class="icon"><use href="#i-close" /></svg></button>
                 </div>
             </div>
             <div id="memo-player-list" class="memo-player-list">
@@ -62,300 +142,264 @@
             </div>
         </aside>
 
-        <!-- 中央：メインコンテンツ -->
+        <!-- 中央の列：メイン -->
         <div class="main-content">
-            <header class="card phase-display">
-                <div id="gm-name-display" class="gm-badge hidden">GM: 〇〇さん</div>
+            <div class="toolbar">
+                <button type="button" id="btn-help-rules" class="btn-secondary btn-small" onclick="openHelpModal()">
+                    <svg class="icon"><use href="#i-book" /></svg>役職・ルール確認</button>
+                <!-- GM 専用。人狼プレイヤーは役職カードの中のボタンから開く -->
+                <button type="button" id="btn-wolf-chat" class="btn-secondary btn-small hidden" onclick="openWolfChatModal()">
+                    <svg class="icon"><use href="#i-chat" /></svg>人狼チャット</button>
+                <button type="button" id="btn-toggle-memo" class="btn-secondary btn-small toggle-memo-btn" onclick="toggleMobileMemo()">
+                    <svg class="icon"><use href="#i-pen" /></svg>メモ</button>
+            </div>
 
-                <h2>現在のフェーズ</h2>
-                <div id="current-phase" class="phase-badge">読込中...</div>
-
-                <div
-                    style="margin-top: 0.5rem; text-align: center; display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
-                    <button type="button" id="btn-help-rules" class="help-rules-btn" onclick="openHelpModal()">📖
-                        役職・ルール確認</button>
-                    <!-- GM 専用。人狼プレイヤーは役職カードの中のボタンから開く -->
-                    <button type="button" id="btn-wolf-chat" class="help-rules-btn hidden"
-                        style="color:#f7768e; border-color:rgba(247,118,142,0.3);" onclick="openWolfChatModal()">🐺
-                        人狼チャット</button>
-                    <button type="button" id="btn-toggle-memo" class="toggle-memo-btn" onclick="toggleMobileMemo()">📝
-                        メモ</button>
-                </div>
-
-                <!-- プレイヤー：あなたの役職表示 -->
-                <div id="my-role-area" class="my-role-display hidden">
-                    <div class="my-role-title">あなたの役職</div>
-                    <div class="role-reveal-wrapper" id="role-reveal-wrapper" onclick="toggleRoleReveal()">
+            <!-- プレイヤー：あなたの役職（カードの寸法・中の枠は全員同じ。伏せている間は裏面だけが見える） -->
+            <section id="my-role-area" class="role-section hidden">
+                <div class="role-reveal-wrapper" id="role-reveal-wrapper" onclick="toggleRoleReveal()" role="button" tabindex="0"
+                    aria-label="あなたの役職カード。クリックでめくる"
+                    onkeydown="if (event.target === this && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); toggleRoleReveal(); }">
+                    <div class="role-card-face">
+                        <div id="my-role-faction" class="role-face-faction"></div>
+                        <svg id="my-role-mark" class="icon role-face-mark"><use href="#i-question" /></svg>
                         <div id="my-role-name" class="my-role-name">確認中...</div>
+                        <p id="my-role-summary" class="role-face-summary"></p>
                         <!-- 全員共通の空き枠（高さは全員同じ）。人狼のときだけ中のボタンが出る -->
                         <div class="role-card-actions">
-                            <button type="button" id="btn-wolf-chat-role" class="help-rules-btn hidden"
-                                style="color:#f7768e; border-color:rgba(247,118,142,0.3);"
-                                onclick="event.stopPropagation(); openWolfChatModal()">🐺 人狼チャット</button>
-                        </div>
-                        <div id="role-cover" class="role-cover">
-                            <div class="role-cover-icon">👁️</div>
-                            <div class="role-cover-text">タップして役職を確認</div>
-                            <div class="role-cover-sub">隣の人に見られないよう隠しています</div>
+                            <button type="button" id="btn-wolf-chat-role" class="btn-secondary btn-small on-card hidden"
+                                onclick="event.stopPropagation(); openWolfChatModal()">人狼チャット</button>
                         </div>
                     </div>
+                    <div id="role-cover" class="role-cover role-card-back"></div>
                 </div>
-
-                <!-- 待機中：役職設定 (GM専用) -->
-                <div id="role-settings-area" class="role-settings hidden">
-                    <h3>役職バランス設定</h3>
-                    <div id="role-counters"></div>
-                    <div id="total-info" class="total-info total-error">
-                        現在の設定: 計 <span id="total-role-count">0</span> 人 / 参加者: <span id="total-player-count">0</span> 人
-                    </div>
-                    <!-- シークレット投票設定 (GM専用) -->
-                    <div class="secret-vote-row">
-                        <span class="secret-vote-label">🔒 シークレット投票（誰が誰に入れたか隠す）</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="check-hide-vote-details" onchange="onHideVoteDetailsChange()">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
+                <div class="role-section-text">
+                    <div class="my-role-title">あなたの役職</div>
+                    <div class="role-hint role-hint-closed">カードをクリックしてめくる</div>
+                    <div class="role-hint role-hint-open">もう一度クリックすると伏せます</div>
                 </div>
+            </section>
 
-                <!-- 投票進捗カウンター（議論・投票フェーズで全員に表示） -->
-                <div id="vote-progress-area" class="vote-progress-area hidden">
-                    <div id="vote-progress-text" class="vote-progress-text">投票完了：0 / 0人</div>
-                    <div class="vote-progress-bar">
-                        <div id="vote-progress-fill" class="vote-progress-fill"></div>
-                    </div>
+            <!-- 待機中：役職設定 (GM専用) -->
+            <section id="role-settings-area" class="panel role-settings hidden">
+                <h3 class="panel-title">役職バランス設定</h3>
+                <div id="role-counters"></div>
+                <div id="total-info" class="total-info total-error">
+                    現在の設定: 計 <span id="total-role-count">0</span> 人 / 参加者: <span id="total-player-count">0</span> 人
                 </div>
+                <!-- シークレット投票設定 (GM専用) -->
+                <div class="secret-vote-row">
+                    <span class="secret-vote-label"><svg class="icon"><use href="#i-lock" /></svg>シークレット投票（誰が誰に入れたか隠す）</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="check-hide-vote-details" onchange="onHideVoteDetailsChange()" aria-label="シークレット投票">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </section>
 
-                <!-- 参加中プレイヤー一覧 -->
-                <section id="player-list-area" class="player-list-area hidden">
-                    <h3>参加中のプレイヤー</h3>
-                    <div id="gm-hint" class="gm-hint hidden">人狼の行動を待っています...</div>
-                    <!-- GM専用: 夜フェーズ行動状況インジケーター -->
-                    <div id="night-action-status" class="night-action-status hidden"></div>
-                    <div id="player-list" class="player-list"></div>
-                </section>
-            </header>
+            <!-- 投票進捗カウンター（投票フェーズで GM の画面に表示） -->
+            <div id="vote-progress-area" class="vote-progress-area hidden">
+                <div id="vote-progress-text" class="vote-progress-text">0 / 0人が投票済み</div>
+                <div class="vote-progress-bar">
+                    <div id="vote-progress-fill" class="vote-progress-fill"></div>
+                </div>
+            </div>
+
+            <!-- 参加中プレイヤー一覧 -->
+            <section id="player-list-area" class="panel player-list-area hidden">
+                <h3 class="panel-title">参加中のプレイヤー</h3>
+                <div id="gm-hint" class="gm-hint hidden">人狼の行動を待っています...</div>
+                <!-- GM専用: 夜フェーズ行動状況インジケーター -->
+                <div id="night-action-status" class="night-action-status hidden"></div>
+                <div id="player-list" class="player-list"></div>
+            </section>
 
             <!-- GMパネル -->
-            <main id="gm-panel" class="card gm-panel hidden" style="margin-top: 2rem;">
-                <h3>GM コントロールパネル</h3>
-
-                <!-- タイムライン進行用の一本化されたボタン -->
-                <div style="display: flex; flex-direction: column; gap: 1rem; width: 100%;">
-                    <button id="btn-next-step" class="action-btn"
-                        style="width: 100%; padding: 1.4rem; font-size: 1.15rem; background: linear-gradient(135deg, #ff9e64, #f7768e); color: #111; font-weight: 900; box-shadow: 0 4px 15px rgba(255,158,100,0.3); border: none; outline: none; border-radius: 16px; cursor: pointer;"
-                        onclick="advanceTimeline(1)">
-                        次のフェーズへ進む ➔
-                    </button>
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
-                        <button id="btn-prev-step" class="action-btn"
-                            style="padding: 0.6rem 1rem; font-size: 0.85rem; background: rgba(255,255,255,0.05); color: var(--text-color); border-radius: 12px; cursor: pointer;"
-                            onclick="advanceTimeline(-1)">
-                            ◀ 1手戻る
-                        </button>
+            <section id="gm-panel" class="panel gm-panel hidden">
+                <h3 class="panel-title">GM コントロールパネル</h3>
+                <div class="gm-controls">
+                    <button id="btn-next-step" class="btn-primary btn-block" onclick="advanceTimeline(1)">次のフェーズへ進む</button>
+                    <div class="gm-controls-row">
+                        <button id="btn-prev-step" class="btn-secondary btn-small" onclick="advanceTimeline(-1)">1手戻る</button>
                         <!-- 強制終了（ロビーへ戻る） -->
-                        <button id="btn-reset" class="action-btn btn-danger"
-                            style="padding: 0.6rem 1rem; font-size: 0.85rem; border-radius: 12px; cursor: pointer;"
-                            onclick="resetGame()">ゲーム強制終了</button>
+                        <button id="btn-reset" class="btn-secondary btn-small btn-danger" onclick="resetGame()">ゲーム強制終了</button>
                     </div>
                 </div>
 
                 <!-- GM専用：手動投票締め切り（投票フェーズ中のみ表示） -->
-                <div id="vote-close-area" class="hidden"
-                    style="margin-top: 1.5rem; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 1rem;">
-                    <button class="action-btn btn-vote-close" onclick="closeVoting()"
-                        style="width:100%; font-size:0.9rem; padding:0.7rem; border-radius:10px;">
-                        🗳️ 投票を強制締め切りする
-                    </button>
+                <div id="vote-close-area" class="gm-vote-close hidden">
+                    <button class="btn-secondary btn-block" onclick="closeVoting()">投票を強制締め切りする</button>
                 </div>
-            </main>
+            </section>
 
             <!-- 夜フェーズ（生存者）UI -->
             <!-- 役職がわからないよう、全パネルの見た目・操作手順をそろえている（違うのは質問文だけ） -->
             <div id="night-action-overlay" class="night-action-container hidden">
-                <!-- 選択完了画面（全員共通。中身は JS で書き換える） -->
-                <div id="night-waiting" class="night-content night-panel hidden">
-                    <h2 class="night-panel-title">✅ 選択完了</h2>
-                    <p class="night-question">朝を待っています…</p>
+                <!-- 選択完了画面（全員共通。中身は JS の renderNightDone で書き換える） -->
+                <div id="night-waiting" class="panel night-panel hidden">
+                    <div class="panel-kicker"><svg class="icon"><use href="#i-moon" /></svg>今夜の選択</div>
+                    <h2 class="night-question">選択完了</h2>
+                    <p class="night-note">朝を待っています…</p>
                 </div>
 
                 <!-- 人狼用の襲撃画面 -->
-                <div id="night-wolf" class="night-content night-panel hidden">
-                    <h2 class="night-panel-title">🌙 今夜の選択</h2>
-                    <p class="night-question">今夜、誰を襲撃しますか？</p>
+                <div id="night-wolf" class="panel night-panel hidden">
+                    <div class="panel-kicker"><svg class="icon"><use href="#i-moon" /></svg>今夜の選択</div>
+                    <h2 class="night-question">今夜、誰を襲撃しますか？</h2>
                     <div id="wolf-target-list" class="target-list"></div>
-                    <button type="button" id="btn-wolf-attack" class="target-btn night-decide-btn" style="display:none;"
+                    <button type="button" id="btn-wolf-attack" class="btn-primary night-decide-btn" style="display:none;"
                         onclick="submitAttack()">決定する</button>
+                    <p class="night-note">朝が来るまで選び直せます</p>
                 </div>
 
                 <!-- 預言者用の占い画面 -->
-                <div id="night-seer" class="night-content night-panel hidden">
-                    <h2 class="night-panel-title">🌙 今夜の選択</h2>
-                    <p class="night-question">今夜、誰を占いますか？</p>
+                <div id="night-seer" class="panel night-panel hidden">
+                    <div class="panel-kicker"><svg class="icon"><use href="#i-moon" /></svg>今夜の選択</div>
+                    <h2 class="night-question">今夜、誰を占いますか？</h2>
                     <div id="seer-target-list" class="target-list"></div>
-                    <button type="button" id="btn-seer-divinate" class="target-btn night-decide-btn" style="display:none;"
+                    <button type="button" id="btn-seer-divinate" class="btn-primary night-decide-btn" style="display:none;"
                         onclick="submitDivination()">決定する</button>
+                    <p class="night-note">朝が来るまで選び直せます</p>
                 </div>
 
                 <!-- 霊媒師用の霊媒画面 -->
-                <div id="night-medium" class="night-content night-panel hidden">
-                    <h2 class="night-panel-title">🌙 今夜の選択</h2>
-                    <p class="night-question">今夜、誰を霊媒しますか？</p>
+                <div id="night-medium" class="panel night-panel hidden">
+                    <div class="panel-kicker"><svg class="icon"><use href="#i-moon" /></svg>今夜の選択</div>
+                    <h2 class="night-question">今夜、誰を霊媒しますか？</h2>
                     <div id="medium-target-list" class="target-list"></div>
-                    <button type="button" id="btn-medium-action" class="target-btn night-decide-btn" style="display:none;"
+                    <button type="button" id="btn-medium-action" class="btn-primary night-decide-btn" style="display:none;"
                         onclick="submitMedium()">決定する</button>
+                    <p class="night-note">朝が来るまで選び直せます</p>
                 </div>
 
                 <!-- 騎士用の守護画面 -->
-                <div id="night-knight" class="night-content night-panel hidden">
-                    <h2 class="night-panel-title">🌙 今夜の選択</h2>
-                    <p class="night-question">今夜、誰を守りますか？</p>
+                <div id="night-knight" class="panel night-panel hidden">
+                    <div class="panel-kicker"><svg class="icon"><use href="#i-moon" /></svg>今夜の選択</div>
+                    <h2 class="night-question">今夜、誰を守りますか？</h2>
                     <div id="knight-target-list" class="target-list"></div>
-                    <button type="button" id="btn-knight-action" class="target-btn night-decide-btn" style="display:none;"
+                    <button type="button" id="btn-knight-action" class="btn-primary night-decide-btn" style="display:none;"
                         onclick="submitKnightGuard()">決定する</button>
+                    <p class="night-note">朝が来るまで選び直せます</p>
                 </div>
 
                 <!-- 夜アクションがない人用のダミー質問画面（質問文は JS で入れる） -->
-                <div id="night-dummy" class="night-content night-panel hidden">
-                    <h2 class="night-panel-title">🌙 今夜の選択</h2>
-                    <p id="dummy-question-text" class="night-question"></p>
+                <div id="night-dummy" class="panel night-panel hidden">
+                    <div class="panel-kicker"><svg class="icon"><use href="#i-moon" /></svg>今夜の選択</div>
+                    <h2 id="dummy-question-text" class="night-question"></h2>
                     <div id="dummy-target-list" class="target-list"></div>
-                    <button type="button" id="btn-dummy-answer" class="target-btn night-decide-btn" style="display:none;"
+                    <button type="button" id="btn-dummy-answer" class="btn-primary night-decide-btn" style="display:none;"
                         onclick="submitDummyAnswer()">決定する</button>
+                    <p class="night-note">朝が来るまで選び直せます</p>
                 </div>
             </div>
+
+            <!-- 朝（全プレイヤー共通）：役職がわからないよう、全員に同じ構成を出す -->
+            <section id="morning-overlay" class="panel morning-panel hidden">
+                <div id="morning-common" class="morning-head">
+                    <div class="panel-kicker"><svg class="icon"><use href="#i-sunrise" /></svg>朝</div>
+                    <h2 class="night-question">朝になりました</h2>
+                    <p class="night-note">昨晩の行動結果を確認してください。<br>GMが議論開始を宣言するまでお待ちください。</p>
+                </div>
+                <!-- 全員共通：昨晩の犠牲者発表（中身は JS の showMorningVictims で入れる） -->
+                <div id="victim-result-area" class="victim-area">
+                    <div id="victim-result-text" class="victim-result"></div>
+                </div>
+                <hr class="rule">
+                <!-- 全員共通：あなたの結果（本文だけ役職で変わる。中身は JS の showMyNightResult で入れる） -->
+                <div id="my-result-area" class="my-result">
+                    <h3 class="my-result-title">あなたの結果</h3>
+                    <div class="my-result-body">
+                        <div id="my-result-line1" class="my-result-line1"></div>
+                        <div id="my-result-line2" class="my-result-line2"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 投票（生存プレイヤー用） -->
+            <section id="vote-overlay" class="vote-overlay hidden">
+                <!-- 投票前：ターゲット選択 -->
+                <div id="vote-select" class="panel night-panel hidden">
+                    <div class="panel-kicker"><svg class="icon"><use href="#i-sun" /></svg>投票</div>
+                    <h2 class="night-question">今日、誰を追放しますか？</h2>
+                    <div id="vote-progress-area-player" class="vote-progress-area hidden">
+                        <div id="vote-progress-text-player" class="vote-progress-text">0 / 0人が投票済み</div>
+                        <div class="vote-progress-bar">
+                            <div id="vote-progress-fill-player" class="vote-progress-fill"></div>
+                        </div>
+                    </div>
+                    <!-- GM が締め切ったときの案内 -->
+                    <p id="vote-closed-note" class="vote-closed-note hidden">GMが投票を締め切りました。集計中...</p>
+                    <div id="vote-target-list" class="target-list"></div>
+                    <div class="vote-actions">
+                        <button type="button" id="btn-vote-submit" class="btn-primary" style="display:none;">投票する</button>
+                        <button type="button" id="btn-vote-skip" class="btn-secondary vote-skip-btn"
+                            onclick="submitVoteSkip()">今日は誰も追放しない</button>
+                    </div>
+                </div>
+                <!-- 投票済：待機 -->
+                <div id="vote-done" class="panel night-panel hidden">
+                    <h2 class="night-question">投票完了</h2>
+                    <p class="night-note">他のプレイヤーを待っています…</p>
+                </div>
+                <!-- 霊界：観戦 -->
+                <div id="vote-ghost" class="panel night-panel hidden">
+                    <h2 class="night-question">観戦中</h2>
+                    <p class="night-note">生存者の投票を見守っています</p>
+                </div>
+            </section>
         </div>
 
-        <!-- 右サイドバー：タイムテーブル -->
+        <!-- 右の列：タイムテーブル -->
         <aside id="right-sidebar" class="sidebar right-sidebar">
             <div class="sidebar-header">
-                <h3>📅 タイムテーブル</h3>
+                <h3>タイムテーブル</h3>
             </div>
-            <div id="timeline-list" class="timeline-list" style="max-height: calc(680px - 5rem); overflow-y: auto;">
+            <div id="timeline-list" class="timeline-list">
                 <!-- JSでタイムスケジュールが動的に生成されます -->
             </div>
         </aside>
     </div>
 
-    <!-- ======================================
-         朝フェーズ専用オーバーレイ（全プレイヤー共通）
-         ====================================== -->
-    <!-- カードは縦1列・同じ幅。役職がわからないよう、全員に同じ3枚を出す -->
-    <div id="morning-overlay" class="night-overlay morning-stack hidden">
-        <!-- 共通：朝の案内メッセージ -->
-        <div id="morning-common" class="night-content morning-card">
-            <h2 style="color: #e0af68;">🌅 朝になりました</h2>
-            <p style="color:#c0caf5;">昨晩の行動結果を確認してください。<br>GMが議論開始を宣言するまでお待ちください。</p>
-        </div>
-        <!-- 全員共通：昨晩 of 犠牲者発表 -->
-        <div id="victim-result-area" class="night-content morning-card">
-            <h2 style="color: #f7768e;">💀 昨晩の犠牲者</h2>
-            <div id="victim-result-text" style="color:#c0caf5; font-size:1.1rem; margin-top:0.5rem;"></div>
-        </div>
-        <!-- 全員共通：あなたの結果（本文だけ役職で変わる。中身は JS の showMyNightResult で入れる） -->
-        <div id="my-result-area" class="night-content morning-card">
-            <h2 class="my-result-title">🌙 あなたの結果</h2>
-            <div class="my-result-body">
-                <div id="my-result-line1" class="my-result-line1"></div>
-                <div id="my-result-line2" class="my-result-line2"></div>
-            </div>
-        </div>
-    </div>
-
     <!-- 霊界モード（死者）オーバーレイ -->
     <div id="ghost-mode-overlay" class="ghost-overlay hidden">
-        <div class="ghost-message">あなたは死亡しました<small>( 観戦モード )</small></div>
+        <div class="ghost-message">あなたは死亡しました<small>観戦モード</small></div>
     </div>
 
-
-
-    <!-- ======================================
-         投票アクションオーバーレイ（生存プレイヤー用）
-         ====================================== -->
-    <div id="vote-overlay" class="vote-overlay hidden">
-        <!-- 投票前：ターゲット選択 -->
-        <div id="vote-select" class="night-content hidden">
-            <h2>🗳️ 投票</h2>
-            <p style="color:#c0caf5;">追放したいプレイヤーに投票してください</p>
-
-            <div id="vote-progress-area-player" class="vote-progress-area hidden"
-                style="margin-bottom: 1.5rem; text-align: left;">
-                <div id="vote-progress-text-player" class="vote-progress-text">投票完了：0 / 0人</div>
-                <div class="vote-progress-bar">
-                    <div id="vote-progress-fill-player" class="vote-progress-fill"></div>
-                </div>
-            </div>
-
-            <div id="vote-target-list" class="target-list"></div>
-
-            <!-- スキップボタン -->
-            <div style="margin-top: 1.2rem; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 1rem;">
-                <button type="button" id="btn-vote-skip" class="vote-skip-btn"
-                    onclick="submitVoteSkip()">⏭️ 今回はスキップ（誰も追放しない）</button>
-            </div>
-        </div>
-        <!-- 投票済：待機 -->
-        <div id="vote-done" class="night-content hidden">
-            <h2>✅ 投票完了</h2>
-            <p style="color:#c0caf5;">他のプレイヤーを待っています…</p>
-        </div>
-        <!-- 霊界：観戦 -->
-        <div id="vote-ghost" class="night-content hidden">
-            <h2>👻 観戦中</h2>
-            <p style="color:#c0caf5;">生存者の投票を見守っています</p>
-        </div>
-    </div>
-
-    <!-- ======================================
-         投票結果オーバーレイ（追放発表・答え合わせ）
-         ====================================== -->
-    <div id="vote-result-overlay" class="vote-result-overlay hidden">
-        <div class="vote-result-content">
+    <!-- 投票結果（追放発表・答え合わせ） -->
+    <div id="vote-result-overlay" class="table-overlay vote-result-overlay hidden">
+        <div class="overlay-panel vote-result-content">
             <div id="vote-result-exile" class="vote-result-exile"></div>
-            <div id="vote-result-title" class="vote-result-title">― 投票結果 ―</div>
+            <div id="vote-result-title" class="vote-result-title">投票結果</div>
             <div id="vote-result-list" class="vote-result-list"></div>
             <div id="vote-countdown" class="vote-countdown hidden"></div>
             <!-- GMのみ表示：夜フェーズへ進むボタン -->
-            <button id="btn-next-night" class="btn-next-night hidden" onclick="proceedToNight()">
-                🌙 夜フェーズへ進む
-            </button>
+            <button id="btn-next-night" class="btn-primary btn-block btn-next-night hidden" onclick="proceedToNight()">夜フェーズへ進む</button>
         </div>
     </div>
 
-    <!-- ======================================
-         リザルト画面（勝敗発表）オーバーレイ
-         ====================================== -->
-    <div id="result-overlay" class="result-overlay hidden">
-        <div class="result-content">
-            <!-- 勝利アイコン -->
-            <span id="result-icon" class="result-icon">⚔️</span>
-
-            <!-- 勝利タイトル -->
+    <!-- 結果発表（勝敗発表） -->
+    <div id="result-overlay" class="table-overlay result-overlay hidden">
+        <div class="overlay-panel result-content">
+            <!-- 勝利のマーク（JS で SVG を入れる） -->
+            <div id="result-icon" class="result-icon" aria-hidden="true"></div>
             <div id="result-title" class="result-title"></div>
-
-            <!-- サブタイトル -->
             <div id="result-subtitle" class="result-subtitle"></div>
 
             <!-- 答え合わせリスト -->
             <div class="result-reveal-card">
-                <h3>― 役職 答え合わせ ―</h3>
+                <h3 class="panel-title">役職の答え合わせ</h3>
                 <div id="result-player-list" class="result-player-list"></div>
             </div>
 
             <!-- GMのみ表示：ロビーに戻るボタン -->
-            <button id="btn-return-lobby" class="btn-return-lobby hidden" onclick="resetGame()">
-                🏠 ロビーに戻る
-            </button>
+            <button id="btn-return-lobby" class="btn-primary btn-block btn-return-lobby hidden" onclick="resetGame()">ロビーに戻る</button>
         </div>
     </div>
 
-    <!-- ======================================
-         役職・ルール確認モーダル
-         ====================================== -->
+    <!-- 役職・ルール確認モーダル -->
     <div id="help-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <span class="modal-close" onclick="closeHelpModal()">&times;</span>
-            <h2 class="modal-title">📖 役職・ルール確認</h2>
+        <div class="modal-content" role="dialog" aria-labelledby="help-modal-title">
+            <button type="button" class="modal-close" onclick="closeHelpModal()" aria-label="閉じる"><svg class="icon"><use href="#i-close" /></svg></button>
+            <h2 id="help-modal-title" class="modal-title">役職・ルール確認</h2>
 
             <!-- 自分の役職説明エリア -->
             <div id="my-role-help-area" class="my-role-help">
@@ -371,50 +415,38 @@
         </div>
     </div>
 
-    <!-- ======================================
-         🐺 人狼チャット ＆ 秘密指令モーダル
-         ====================================== -->
+    <!-- 人狼チャット ＆ 秘密指令モーダル -->
     <div id="wolf-chat-modal" class="modal-overlay hidden">
-        <div class="modal-content" style="max-width: 600px;">
-            <span class="modal-close" onclick="closeWolfChatModal()">&times;</span>
-            <h2 class="modal-title" style="color: #f7768e;">🐺 人狼専用チャット</h2>
+        <div class="modal-content modal-wide" role="dialog" aria-labelledby="wolf-chat-title">
+            <button type="button" class="modal-close" onclick="closeWolfChatModal()" aria-label="閉じる"><svg class="icon"><use href="#i-close" /></svg></button>
+            <h2 id="wolf-chat-title" class="modal-title">人狼専用チャット</h2>
 
-            <!-- 📌 GMからの秘密指令表示エリア (人狼 & GM共通) -->
-            <div id="wolf-mission-display-area" class="my-role-help hidden"
-                style="border-color: #f7768e; background: rgba(247,118,142,0.08); margin-bottom: 1.5rem;">
-                <h3 style="color: #f7768e; margin: 0 0 0.5rem 0;">📌 GMからの秘密指令</h3>
-                <p id="wolf-mission-text"
-                    style="color: #fff; font-size: 1rem; font-weight: 700; margin: 0; white-space: pre-wrap;"></p>
+            <!-- GMからの秘密指令表示エリア (人狼 & GM共通) -->
+            <div id="wolf-mission-display-area" class="mission-box hidden">
+                <h3>GMからの秘密指令</h3>
+                <p id="wolf-mission-text" class="mission-text"></p>
             </div>
 
-            <!-- 📝 GM専用：秘密指令送信フォーム -->
-            <div id="gm-mission-form-area" class="hidden"
-                style="margin-bottom: 1.5rem; background: rgba(0, 0, 0, 0.2); padding: 1rem; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);">
-                <h3 style="margin: 0 0 0.8rem 0; font-size: 0.95rem; color: #ff9e64; text-align: left;">📢
-                    【GM専用】人狼への秘密指令送信</h3>
-                <div style="display: flex; gap: 0.5rem;">
-                    <input type="text" id="input-gm-mission" class="name-input"
-                        style="font-size: 0.95rem; padding: 0.7rem; text-align: left;" placeholder="ウインクした人しか襲撃できません 等"
-                        autocomplete="off">
-                    <button type="button" class="action-btn" style="padding: 0.7rem 1.2rem; flex-shrink: 0;"
-                        onclick="submitGmMission()">送信</button>
+            <!-- GM専用：秘密指令送信フォーム -->
+            <div id="gm-mission-form-area" class="mission-form hidden">
+                <h3>【GM専用】人狼への秘密指令送信</h3>
+                <div class="input-row">
+                    <input type="text" id="input-gm-mission" class="name-input" placeholder="ウインクした人しか襲撃できません 等"
+                        autocomplete="off" aria-label="秘密指令">
+                    <button type="button" class="btn-primary btn-small" onclick="submitGmMission()">送信</button>
                 </div>
             </div>
 
-            <!-- 💬 チャットメッセージ表示エリア -->
-            <div id="wolf-chat-log"
-                style="height: 300px; overflow-y: auto; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-color); border-radius: 16px; padding: 1rem; margin-bottom: 1rem; text-align: left; display: flex; flex-direction: column; gap: 0.8rem;">
+            <!-- チャットメッセージ表示エリア -->
+            <div id="wolf-chat-log" class="chat-log">
                 <!-- メッセージが動的に追加されます -->
             </div>
 
-            <!-- ✉️ メッセージ送信エリア -->
-            <div style="display: flex; gap: 0.5rem;">
-                <input type="text" id="input-wolf-chat" class="name-input"
-                    style="font-size: 0.95rem; padding: 0.8rem; text-align: left;" placeholder="作戦を話し合おう..."
-                    autocomplete="off" onkeydown="if(event.key==='Enter') sendWolfChatMessage()">
-                <button type="button" class="action-btn"
-                    style="padding: 0.8rem 1.5rem; flex-shrink: 0; background: rgba(247,118,142,0.2); color: #f7768e; border-color: rgba(247,118,142,0.4);"
-                    onclick="sendWolfChatMessage()">送信</button>
+            <!-- メッセージ送信エリア -->
+            <div class="input-row">
+                <input type="text" id="input-wolf-chat" class="name-input" placeholder="作戦を話し合おう..."
+                    autocomplete="off" aria-label="メッセージ" onkeydown="if(event.key==='Enter') sendWolfChatMessage()">
+                <button type="button" class="btn-primary btn-small" onclick="sendWolfChatMessage()">送信</button>
             </div>
         </div>
     </div>

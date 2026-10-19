@@ -5,6 +5,7 @@
 console.log("【最新版 2026/10/16 v2】夜フェーズのダミー質問追加・夜の画面の見た目と操作手順を全役職で統一");
 
 import { supabaseClient } from './config.js';
+import { initPalette } from './theme.js';
 import {
     getMyPlayerName, getMyPlayerId, isMyPlayer, getMyRoleType, getMyRoleName,
     getCurrentPlayers, setCurrentPlayers,
@@ -362,10 +363,14 @@ function setupGameView() {
     loginView.classList.add('hidden');
     gameView.classList.remove('hidden');
 
+    // 上のバー右側の「○○ として参加中」（GM・プレイヤー共通）
+    gmNameDisplay.textContent = getMyRoleType() === 'gm'
+        ? `GM ${getMyPlayerName()} として参加中`
+        : `${getMyPlayerName()} として参加中`;
+    gmNameDisplay.classList.remove('hidden');
+
     if (getMyRoleType() === 'gm') {
         gmPanel.classList.remove('hidden');
-        gmNameDisplay.textContent = `GM: ${getMyPlayerName()} さん`;
-        gmNameDisplay.classList.remove('hidden');
         initRoleCounters();
     }
     // 人狼チャットボタンの表示制御
@@ -388,6 +393,9 @@ function restoreSession() {
 // =============================================
 // 初期化
 // =============================================
+// 配色（この端末だけの設定）を復元し、配色ボタンを使えるようにする
+initPalette();
+
 window.addEventListener('DOMContentLoaded', () => {
     restoreSession();
 });

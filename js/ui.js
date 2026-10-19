@@ -4,6 +4,7 @@
 // =============================================
 
 import { supabaseClient } from './config.js';
+import { setLightForPhase } from './theme.js';
 import { GAME_TIMELINE, phaseNames, ROLES_INFO, ROLE_BADGE_CLASS, NIGHT_ACTION_ROLES, DUMMY_QUESTIONS } from './config.js';
 import {
     getMyPlayerName, getMyPlayerId, isMyPlayer, getMyRoleType, getMyRoleName, setMyRoleName,
@@ -24,6 +25,39 @@ import {
 
 // 循環依存を避けるため、action.jsの関数はimport onDemandではなく引数/コールバックで受け取る
 // ただし実際は同一モジュールバンドルではないため、window経由で呼ぶ設計にする
+
+// =============================================
+// アイコン（index.html のインラインSVG を参照する）
+// =============================================
+function iconHtml(id) {
+    return `<svg class="icon" aria-hidden="true"><use href="#${id}" /></svg>`;
+}
+
+// 役職 → 役職カードのマーク
+const ROLE_MARK = {
+    '人狼': 'i-wolf',
+    '市民': 'i-house',
+    '預言者': 'i-eye',
+    '霊媒師': 'i-candle',
+    '騎士': 'i-shield',
+    'てるてる': 'i-teru'
+};
+
+/**
+ * 役職カードの表面（陣営・マーク・役職名・説明）を入れる
+ * カードの寸法は全員同じで、伏せている間は表面が見えない
+ */
+function setRoleFace(roleName) {
+    const info = ROLES_INFO.find(r => r.name === roleName);
+    const nameEl = document.getElementById('my-role-name');
+    if (nameEl) nameEl.textContent = roleName || '???';
+    const factionEl = document.getElementById('my-role-faction');
+    if (factionEl) factionEl.textContent = info ? info.faction : '';
+    const summaryEl = document.getElementById('my-role-summary');
+    if (summaryEl) summaryEl.textContent = info ? info.summary : '';
+    const markUse = document.querySelector('#my-role-mark use');
+    if (markUse) markUse.setAttribute('href', `#${ROLE_MARK[roleName] || 'i-question'}`);
+}
 
 // =============================================
 // 夜フェーズ：全員共通の選択画面の部品
@@ -90,10 +124,11 @@ export function renderNightDone(kind, pickedName) {
         ? `<p class="night-picked">（${escapeHTML(pickedName)}さんを選びました）</p>`
         : '';
     el.innerHTML = `
-        <h2 class="night-panel-title">✅ 選択完了</h2>
-        <p class="night-question">朝を待っています…</p>
+        <div class="panel-kicker">${iconHtml('i-moon')}今夜の選択</div>
+        <h2 class="night-question">選択完了</h2>
+        <p class="night-note">朝を待っています…</p>
         ${pickedHtml}
-        <button type="button" class="change-night-target-btn" onclick="changeNightTarget('${kind}')">&#x21bb; 選び直す</button>
+        <button type="button" class="btn-secondary change-night-target-btn" onclick="changeNightTarget('${kind}')">${iconHtml('i-refresh')}選び直す</button>
     `;
 }
 
@@ -130,9 +165,8 @@ export async function updatePhaseDisplay(phase) {
     document.getElementById('result-overlay').classList.add('hidden');
     setResultShown(false);
 
-    // confirm_roleの背景テーマはdiscussion（議論）と同様にする
-    const themeName = phase === 'confirm_role' ? 'discussion' : phase;
-    document.body.className = `theme-${themeName}`;
+    // テーブルの照明（夜・朝・昼）を切り替える
+    setLightForPhase(phase);
 
     // GMヒント（夜フェーズに行動待ちを表示）
     if (getMyRoleType() === 'gm' && phase === 'night') {
@@ -175,7 +209,8 @@ export async function updatePhaseDisplay(phase) {
 
         // ── 夕フェーズ: 投票進捗バーはGM・プレイヤー共通で表示（投票フェーズのみ） ──
         if (phase === 'voting') {
-            document.getElementById('vote-progress-area').classList.remove('hidden');
+            // 上の進捗は GM 用（プレイヤーは投票パネルの中に同じ進捗が出る）
+            document.getElementById('vote-progress-area').classList.toggle('hidden', getMyRoleType() !== 'gm');
             const pArea = document.getElementById('vote-progress-area-player');
             if (pArea) pArea.classList.remove('hidden');
             updateVoteProgress();
@@ -345,11 +380,10 @@ export async function fetchMyRole() {
 
         if (data && data.role) {
             setMyRoleName(data.role);
-            document.getElementById('my-role-name').textContent = getMyRoleName();
         } else {
             setMyRoleName('役職なし');
-            document.getElementById('my-role-name').textContent = getMyRoleName();
         }
+        setRoleFace(getMyRoleName());
         // 人狼チャットボタンの表示制御
         updateWolfChatButtonVisibility();
     } catch (err) {
@@ -566,7 +600,7 @@ function renderGhostViewFor(playerName) {
         myRoleArea.classList.remove('hidden');
         const roleNameEl = document.getElementById('my-role-name');
         if (roleNameEl) {
-            roleNameEl.textContent = target.role || '???';
+            setRoleFace(target.role || '???');
             // 役職バッジのクラスを反映
             roleNameEl.className = `my-role-name ghost-view-role ${ROLE_BADGE[target.role] || 'role-badge-unknown'}`;
         }
@@ -624,13 +658,13 @@ function renderGhostViewFor(playerName) {
                     });
 
                     if (candidates.length === 0) {
-                        listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4); font-size:0.85rem;">対象なし</p>';
+                        listEl.innerHTML = '<p class="empty-note">対象なし</p>';
                     } else {
                         listEl.innerHTML = '';
                         candidates.forEach(c => {
                             const btn = document.createElement('button');
                             btn.className = `target-btn ghost-view-btn${target.night_target_id === c.id ? ' ghost-selected' : ''}`;
-                            btn.textContent = c.name + (target.night_target_id === c.id ? ' ✅' : '');
+                            btn.textContent = c.name;
                             btn.disabled = true;  // 幽霊側は操作不可
                             listEl.appendChild(btn);
                         });
@@ -662,9 +696,9 @@ function renderGhostViewFor(playerName) {
                 panel.appendChild(ghostInfo);
             }
             if (targetName) {
-                ghostInfo.innerHTML = `👁️ <strong>${escapeHTML(target.name)}</strong> の現在の選択: <span class="ghost-view-target-name">${escapeHTML(targetName)}</span>`;
+                ghostInfo.innerHTML = `<strong>${escapeHTML(target.name)}</strong> の現在の選択: <span class="ghost-view-target-name">${escapeHTML(targetName)}</span>`;
             } else {
-                ghostInfo.innerHTML = `👁️ <strong>${escapeHTML(target.name)}</strong> はまだ選択していません`;
+                ghostInfo.innerHTML = `<strong>${escapeHTML(target.name)}</strong> はまだ選択していません`;
             }
         }
     }
@@ -718,32 +752,30 @@ export function renderPlayerList() {
         div.appendChild(nameSpan);
 
         if (getMyRoleType() === 'gm') {
+            const actions = document.createElement('div');
+            actions.className = 'player-item-actions';
             if (p.is_alive) {
                 const btn = document.createElement('button');
+                btn.type = 'button';
                 btn.className = 'btn-kill';
                 btn.textContent = '追放';
                 btn.onclick = () => window.killPlayer(p.id, p.name);
-                div.appendChild(btn);
+                actions.appendChild(btn);
             } else {
                 const badge = document.createElement('span');
                 badge.className = 'badge-dead';
                 badge.textContent = '死亡';
-                div.appendChild(badge);
+                actions.appendChild(badge);
             }
 
-            // GMだけが見える「❌ キック」ボタン
+            // GMだけが見える「キック」ボタン
             const kickBtn = document.createElement('button');
+            kickBtn.type = 'button';
             kickBtn.className = 'btn-kick';
-            kickBtn.textContent = '❌ キック';
-            kickBtn.style.marginLeft = '0.5rem';
-            kickBtn.style.background = '#f7768e';
-            kickBtn.style.color = '#fff';
-            kickBtn.style.border = 'none';
-            kickBtn.style.borderRadius = '6px';
-            kickBtn.style.padding = '0.2rem 0.5rem';
-            kickBtn.style.cursor = 'pointer';
+            kickBtn.textContent = 'キック';
             kickBtn.onclick = () => window.kickPlayer(p.id, p.name);
-            div.appendChild(kickBtn);
+            actions.appendChild(kickBtn);
+            div.appendChild(actions);
         } else if (iAmGhost && p.role) {
             // 幽霊（死亡プレイヤー）には全員の役職バッジを表示（神視点）
             const ROLE_BADGE = {
@@ -756,7 +788,6 @@ export function renderPlayerList() {
             };
             const ghostBadge = document.createElement('span');
             ghostBadge.className = `badge-dead ${ROLE_BADGE[p.role] || 'role-badge-unknown'}`;
-            ghostBadge.style.cssText = 'margin-left:0.4rem; font-size:0.72rem; padding:0.1rem 0.4rem; border-radius:5px; font-weight:700;';
             ghostBadge.textContent = p.role;
             div.appendChild(ghostBadge);
         }
@@ -788,7 +819,7 @@ export function renderMemoList() {
 
     // 自分自身の情報が取得できるまで待機（初期ロード対策）
     if (!myPlayerId) {
-        memoPlayerList.innerHTML = '<div style="color:rgba(255,255,255,0.4); text-align:center; padding:1rem; font-size:0.85rem;">プレイヤー情報取得中...</div>';
+        memoPlayerList.innerHTML = '<p class="empty-note">プレイヤー情報取得中...</p>';
         return;
     }
 
@@ -974,41 +1005,31 @@ export async function showResultScreen() {
     const isWolf = winner === 'wolf';
     const isTeruteru = winner === 'teruteru' || winner === 'てるてる';
 
-    if (isTeruteru) {
-        document.body.className = 'theme-result-teruteru';
-        overlay.classList.add('teruteru-win');
-        overlay.classList.remove('citizen-win', 'wolf-win');
-    } else if (isCitizen) {
-        document.body.className = 'theme-result-citizen';
-        overlay.classList.add('citizen-win');
-        overlay.classList.remove('wolf-win', 'teruteru-win');
-    } else {
-        document.body.className = 'theme-result-wolf';
-        overlay.classList.add('wolf-win');
-        overlay.classList.remove('citizen-win', 'teruteru-win');
-    }
+    // 結果発表は昼の照明
+    setLightForPhase('result');
+    overlay.classList.toggle('teruteru-win', isTeruteru);
+    overlay.classList.toggle('citizen-win', !isTeruteru && isCitizen);
+    overlay.classList.toggle('wolf-win', !isTeruteru && !isCitizen);
 
-    if (isTeruteru) {
-        document.getElementById('result-icon').textContent = '🎈';
-    } else {
-        document.getElementById('result-icon').textContent = isCitizen ? '☀️' : '🐺';
-    }
+    // 大見出し（狼／家／てるてるのマーク）と一言の理由
+    const iconId = isTeruteru ? 'i-teru' : (isCitizen ? 'i-house' : 'i-wolf');
+    document.getElementById('result-icon').innerHTML = iconHtml(iconId);
 
     const titleEl = document.getElementById('result-title');
     if (isTeruteru) {
         titleEl.className = 'result-title teruteru';
-        titleEl.textContent = 'てるてるの単独勝利！';
+        titleEl.textContent = 'てるてるの勝ち';
     } else {
         titleEl.className = `result-title ${isCitizen ? 'citizen' : 'wolf'}`;
-        titleEl.textContent = isCitizen ? '市民チームの勝利！' : '人狼チームの勝利！';
+        titleEl.textContent = isCitizen ? '村人の勝ち' : '人狼の勝ち';
     }
 
     if (isTeruteru) {
-        document.getElementById('result-subtitle').textContent = '見事に追放（処刑）されました！';
+        document.getElementById('result-subtitle').textContent = 'てるてるが昼の投票で追放されました';
     } else {
         document.getElementById('result-subtitle').textContent = isCitizen
-            ? '平和が訪れた！'
-            : '村は滅び去った…';
+            ? '人狼を全員追放しました'
+            : '人狼の数が村人の数に並びました';
     }
 
     await renderResultPlayerList();
@@ -1023,7 +1044,7 @@ export async function showResultScreen() {
 
 export async function renderResultPlayerList() {
     const listEl = document.getElementById('result-player-list');
-    listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4); text-align:center;">読み込み中...</p>';
+    listEl.innerHTML = '<p class="empty-note">読み込み中...</p>';
 
     try {
         const { data: players, error } = await supabaseClient
@@ -1036,44 +1057,50 @@ export async function renderResultPlayerList() {
         listEl.innerHTML = '';
 
         if (!players || players.length === 0) {
-            listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4);">プレイヤー情報が見つかりません</p>';
+            listEl.innerHTML = '<p class="empty-note">プレイヤー情報が見つかりません</p>';
             return;
         }
 
-        players.forEach((p, i) => {
+        players.forEach((p) => {
+            // 全員の行：小さな役職カード・名前（と役職）・状態
             const item = document.createElement('div');
             // hideVoteDetails=ON の場合、役職でのスタイリングも行わない（人狼判定も隠す）
             const isWolf = !getHideVoteDetails() && p.role === '人狼';
             item.className = `result-player-item${isWolf ? ' is-wolf' : ''}`;
-            item.style.animationDelay = `${i * 0.08}s`;
+
+            // hideVoteDetails=ON の場合、役職を表示しない（役職漏洩防止）
+            const card = document.createElement('div');
+            if (getHideVoteDetails()) {
+                card.className = 'mini-role-card is-hidden';
+            } else {
+                card.className = 'mini-role-card';
+                card.innerHTML = iconHtml(ROLE_MARK[p.role] || 'i-question');
+            }
+            item.appendChild(card);
 
             const nameDiv = document.createElement('div');
             nameDiv.className = 'result-player-name';
             nameDiv.appendChild(document.createTextNode(p.name));
-
-            if (!p.is_alive) {
-                const deadMark = document.createElement('span');
-                deadMark.className = 'dead-mark';
-                deadMark.textContent = '（死亡）';
-                nameDiv.appendChild(deadMark);
-            }
-
-            // hideVoteDetails=ON の場合、役職バッジを表示しない（役職漏洩防止）
             if (!getHideVoteDetails()) {
-                const roleBadge = document.createElement('span');
-                const badgeClass = ROLE_BADGE_CLASS[p.role] || 'role-badge-unknown';
-                roleBadge.className = `result-role-badge ${badgeClass}`;
-                roleBadge.textContent = p.role || '役職なし';
-                item.appendChild(roleBadge);
+                const roleSpan = document.createElement('span');
+                roleSpan.className = 'result-player-role';
+                roleSpan.textContent = p.role || '役職なし';
+                nameDiv.appendChild(roleSpan);
             }
-
             item.appendChild(nameDiv);
+
+            // 死亡の日・理由は DB に記録がないため「生存／死亡」だけを出す
+            const status = document.createElement('span');
+            status.className = `result-status${p.is_alive ? '' : ' is-dead'}`;
+            status.textContent = p.is_alive ? '生存' : '死亡';
+            item.appendChild(status);
+
             listEl.appendChild(item);
         });
 
     } catch (err) {
         console.error('リザルトプレイヤー一覧取得エラー:', err);
-        listEl.innerHTML = '<p style="color:#f7768e;">プレイヤー情報の取得に失敗しました</p>';
+        listEl.innerHTML = '<p class="empty-note">プレイヤー情報の取得に失敗しました</p>';
     }
 }
 
@@ -1110,18 +1137,39 @@ export function renderVoteTargets() {
     const list = document.getElementById('vote-target-list');
     list.innerHTML = '';
 
+    const submitBtn = document.getElementById('btn-vote-submit');
+    if (submitBtn) {
+        submitBtn.style.display = 'none';
+        submitBtn.disabled = false;
+        submitBtn.onclick = null;
+    }
+    const closedNote = document.getElementById('vote-closed-note');
+    if (closedNote) closedNote.classList.add('hidden');
+    const skipBtn = document.getElementById('btn-vote-skip');
+    if (skipBtn) skipBtn.disabled = false;
+
     const targets = getCurrentPlayers().filter(p => p.is_alive && !isMyPlayer(p));
 
     if (targets.length === 0) {
-        list.innerHTML = '<p style="color:#888;">投票できるプレイヤーがいません</p>';
+        list.innerHTML = '<p class="empty-note">投票できるプレイヤーがいません</p>';
         return;
     }
 
+    // 名前カードを選ぶ →「○○さんに投票」で投票（確認ダイアログは submitVote の中）
     targets.forEach(t => {
         const btn = document.createElement('button');
+        btn.type = 'button';
         btn.className = 'target-btn';
         btn.textContent = t.name;
-        btn.onclick = () => window.submitVote(t.name, t.id);
+        btn.onclick = () => {
+            list.querySelectorAll('.target-btn').forEach(x => x.classList.remove('selected'));
+            btn.classList.add('selected');
+            if (submitBtn) {
+                submitBtn.textContent = `${t.name}さんに投票`;
+                submitBtn.style.display = '';
+                submitBtn.onclick = () => window.submitVote(t.name, t.id);
+            }
+        };
         list.appendChild(btn);
     });
 }
@@ -1136,12 +1184,12 @@ export function updateVoteProgress() {
 
     const textEl = document.getElementById('vote-progress-text');
     const fillEl = document.getElementById('vote-progress-fill');
-    if (textEl) textEl.textContent = `投票完了：${voted} / ${total}人`;
+    if (textEl) textEl.textContent = `${voted} / ${total}人が投票済み`;
     if (fillEl) fillEl.style.width = total > 0 ? `${(voted / total) * 100}%` : '0%';
 
     const pTextEl = document.getElementById('vote-progress-text-player');
     const pFillEl = document.getElementById('vote-progress-fill-player');
-    if (pTextEl) pTextEl.textContent = `投票完了：${voted} / ${total}人`;
+    if (pTextEl) pTextEl.textContent = `${voted} / ${total}人が投票済み`;
     if (pFillEl) pFillEl.style.width = total > 0 ? `${(voted / total) * 100}%` : '0%';
 }
 
@@ -1152,12 +1200,12 @@ export async function showVoteResult(exiledName, voteLog) {
     // 追放者の表示
     const exileEl = document.getElementById('vote-result-exile');
     if (exiledName) {
-        exileEl.innerHTML = `🗳️ 「${escapeHTML(exiledName)}」が<br>追放されました`;
-        exileEl.style.color = '';
+        exileEl.innerHTML = `「${escapeHTML(exiledName)}」が<br>追放されました`;
+        exileEl.classList.remove('is-none');
     } else {
         // 処刑なし
-        exileEl.innerHTML = `⏭️ 本日は誰も追放されませんでした`;
-        exileEl.style.color = '#9ece6a';
+        exileEl.innerHTML = '本日は誰も追放されませんでした';
+        exileEl.classList.add('is-none');
     }
 
     // 投票ログの描画
@@ -1193,8 +1241,8 @@ export async function showVoteResult(exiledName, voteLog) {
         }
 
         const secretHeader = document.createElement('div');
-        secretHeader.style.cssText = 'color:rgba(255,255,255,0.4); font-size:0.8rem; text-align:center; margin-bottom:0.6rem; letter-spacing:0.05em;';
-        secretHeader.textContent = '🔒 投票内容は非公開です';
+        secretHeader.className = 'vote-secret-note';
+        secretHeader.innerHTML = `${iconHtml('i-lock')}投票内容は非公開です`;
         listEl.appendChild(secretHeader);
 
         const sorted = Object.entries(tally).sort((a, b) => b[1] - a[1]);
@@ -1202,7 +1250,6 @@ export async function showVoteResult(exiledName, voteLog) {
             sorted.forEach(([name, count], i) => {
                 const item = document.createElement('div');
                 item.className = 'vote-log-item';
-                item.style.animationDelay = `${i * 0.07}s`;
 
                 const nameSpan = document.createElement('span');
                 nameSpan.className = name === exiledName ? 'target' : 'voter';
@@ -1217,7 +1264,7 @@ export async function showVoteResult(exiledName, voteLog) {
                 listEl.appendChild(item);
             });
         } else {
-            listEl.innerHTML += `<div style="color:rgba(255,255,255,0.4); font-size:0.85rem; text-align:center; padding:0.5rem;">投票記録がありません</div>`;
+            listEl.insertAdjacentHTML('beforeend', '<p class="empty-note">投票記録がありません</p>');
         }
     } else {
         // ── 通常モード: 全ログ表示 ──
@@ -1225,7 +1272,6 @@ export async function showVoteResult(exiledName, voteLog) {
             finalVoteLog.forEach((entry, i) => {
                 const item = document.createElement('div');
                 item.className = 'vote-log-item';
-                item.style.animationDelay = `${i * 0.07}s`;
 
                 const voterSpan = document.createElement('span');
                 voterSpan.className = 'voter';
@@ -1233,7 +1279,7 @@ export async function showVoteResult(exiledName, voteLog) {
 
                 const arrowSpan = document.createElement('span');
                 arrowSpan.className = 'arrow';
-                arrowSpan.textContent = '➡️';
+                arrowSpan.textContent = '→';
 
                 const targetSpan = document.createElement('span');
                 if (entry.target) {
@@ -1252,7 +1298,7 @@ export async function showVoteResult(exiledName, voteLog) {
                 listEl.appendChild(item);
             });
         } else {
-            listEl.innerHTML = `<div style="color:rgba(255,255,255,0.4); font-size:0.85rem; text-align:center; padding:0.5rem;">投票記録がありません</div>`;
+            listEl.innerHTML = '<p class="empty-note">投票記録がありません</p>';
         }
     }
 
@@ -1263,13 +1309,12 @@ export async function showVoteResult(exiledName, voteLog) {
 
         const titleDiv = document.createElement('div');
         titleDiv.className = 'ghost-vote-log-reveal-title';
-        titleDiv.textContent = '👻 神視点：全員の投票内訳';
+        titleDiv.textContent = '神視点：全員の投票内訳';
         ghostRevealDiv.appendChild(titleDiv);
 
         finalVoteLog.forEach((entry, i) => {
             const row = document.createElement('div');
             row.className = 'vote-log-item';
-            row.style.animationDelay = `${i * 0.05}s`;
 
             const voterSpan = document.createElement('span');
             voterSpan.className = 'voter';
@@ -1277,7 +1322,7 @@ export async function showVoteResult(exiledName, voteLog) {
 
             const arrowSpan = document.createElement('span');
             arrowSpan.className = 'arrow';
-            arrowSpan.textContent = '➡️';
+            arrowSpan.textContent = '→';
 
             const targetSpan = document.createElement('span');
             if (entry.target) {
@@ -1361,11 +1406,21 @@ export function showMorningVictims() {
         victims = players.filter(p => wolfTargetIds.includes(p.id) && !p.is_alive);
     }
 
+    // 犠牲者は少し傾けた名前カード＋「昨晩の犠牲者」「○○さん」
     if (victims.length > 0) {
-        const victimNames = victims.map(v => escapeHTML(v.name)).join(' さん、');
-        textEl.innerHTML = `昨晩の犠牲者は <span style="color:#f7768e; font-weight:bold;">${victimNames} さん</span> でした。`;
+        const cards = victims.map(v => `<div class="victim-card">${escapeHTML(v.name)}</div>`).join('');
+        const victimNames = victims.map(v => `${escapeHTML(v.name)}さん`).join('、');
+        textEl.innerHTML = `
+            <div class="victim-cards">${cards}</div>
+            <div class="victim-label">昨晩の犠牲者</div>
+            <div class="victim-names">${victimNames}</div>
+        `;
     } else {
-        textEl.innerHTML = '昨晩は誰も死にませんでした。';
+        textEl.innerHTML = `
+            <div class="victim-cards"><div class="victim-card is-empty"></div></div>
+            <div class="victim-label">昨晩の犠牲者</div>
+            <div class="victim-names">昨晩は誰も死にませんでした。</div>
+        `;
     }
 }
 
@@ -1419,15 +1474,15 @@ export async function showMyNightResult() {
         const role = data.role || getMyRoleName();
         const isInspector = role === '預言者' || role === '霊媒師';
 
+        // アクセント色の語は全員ちょうど1つ（預言者・霊媒師は判定、それ以外は選んだ相手）にして、遠目に役職が分からないようにする
         if (isInspector && data.night_result) {
-            // 色で遠目に分からないよう、結果のラベルは本文と同じ色（太字のみ）
-            const label = data.night_result === '人狼' ? '<strong>【人狼】</strong>' : '<strong>【人間】</strong>';
-            setMyResultLines(`「${targetName}」さんは ${label} でした`);
+            const label = data.night_result === '人狼' ? '【人狼】' : '【人間】';
+            setMyResultLines(`「${targetName}」さんは <strong class="result-accent">${label}</strong> でした`);
         } else if (isInspector && data.is_alive) {
             // 結果がまだ届いていない → 「確認中…」のまま待つ
         } else {
             // 人狼・騎士（結果のない役職）や、夜のうちに死亡して結果が出ない預言者・霊媒師
-            setMyResultLines(`あなたは「${targetName}」さんを選びました`);
+            setMyResultLines(`あなたは「<strong class="result-accent">${targetName}</strong>」さんを選びました`);
         }
         return;
     }
@@ -1436,7 +1491,7 @@ export async function showMyNightResult() {
     const dummy = getDummyNightState(getCurrentTimelineIndex() - 1);
     if (dummy && dummy.answerId) {
         const question = DUMMY_QUESTIONS[dummy.q] || '';
-        setMyResultLines(`「${escapeHTML(question)}」`, `→ あなたは「${escapeHTML(dummy.answerName)}」さんを選びました`);
+        setMyResultLines(`「${escapeHTML(question)}」`, `あなたは「<strong class="result-accent">${escapeHTML(dummy.answerName)}</strong>」さんを選びました`);
         return;
     }
 
@@ -1480,12 +1535,12 @@ export function renderNightActionStatus() {
     const acted = alivePlayers.filter(p => !NIGHT_ACTION_ROLES.includes(p.role) || !!p.night_target_id).length;
     const total = alivePlayers.length;
 
-    let html = `<div class="night-status-header"><span class="night-status-title">🌙 夜の行動状況</span><span class="night-status-count">${acted} / ${total}人 完了</span></div><div class="night-status-list">`;
+    let html = `<div class="night-status-header"><span class="night-status-title">${iconHtml('i-moon')}夜の行動状況</span><span class="night-status-count">${acted} / ${total}人 完了</span></div><div class="night-status-list">`;
 
     alivePlayers.forEach(p => {
         const needsAction = NIGHT_ACTION_ROLES.includes(p.role);
         const hasActed = !needsAction || !!p.night_target_id;
-        const icon = hasActed ? '✅' : '⏳';
+        const icon = hasActed ? iconHtml('i-check') : iconHtml('i-clock');
         const statusClass = hasActed ? 'acted' : 'pending';
         html += `<div class="night-status-item ${statusClass}"><span class="night-status-icon">${icon}</span><span class="night-status-name">${escapeHTML(p.name)}</span><span class="night-status-role">${needsAction ? escapeHTML(p.role) : '（行動なし）'}</span></div>`;
     });
@@ -1504,26 +1559,32 @@ export function renderTimeline() {
     listEl.innerHTML = '';
     const currentTimelineIndex = getCurrentTimelineIndex();
 
+    // 上のバーのフェーズ名の下に「○日目・時限」を小さく出す
+    const phaseSub = document.getElementById('phase-sub');
+    const currentStep = GAME_TIMELINE[currentTimelineIndex];
+    if (phaseSub && currentStep) {
+        const dayMatch = currentStep.label.match(/【(\d+)日目】/);
+        phaseSub.textContent = dayMatch ? `${dayMatch[1]}日目・${currentStep.period}` : currentStep.period;
+    }
+
     GAME_TIMELINE.forEach((step, idx) => {
         const item = document.createElement('div');
         item.id = `timeline-item-${idx}`;
 
         // 過去・現在・未来のクラス判定
         let stateClass = 'is-future';
-        let pinIcon = '';
 
         if (idx < currentTimelineIndex) {
             stateClass = 'is-past';
         } else if (idx === currentTimelineIndex) {
             stateClass = 'is-current';
-            pinIcon = '📌 ';
         }
 
         item.className = `timeline-item ${stateClass}`;
 
         item.innerHTML = `
             <div class="timeline-period-badge">${step.period}</div>
-            <div class="timeline-label-text">${pinIcon}${step.label}</div>
+            <div class="timeline-label-text">${step.label}</div>
         `;
 
         listEl.appendChild(item);
@@ -1548,7 +1609,7 @@ export function updateGmTimelineButtons() {
 
     // 【バグ2修正】勝者が確定済み（まだ result フェーズになっていない）場合は強制ジャンプボタンを表示
     if (pendingWinner && lastKnownPhase !== 'result') {
-        btnNext.textContent = '⚔️ 勝利確定！→ 終礼（結果発表）へジャンプ ➔';
+        btnNext.textContent = '勝利確定！ 終礼（結果発表）へジャンプ';
         btnNext.style.opacity = '';
         btnNext.style.cursor = '';
         btnPrev.style.display = 'none';
@@ -1567,35 +1628,35 @@ export function updateGmTimelineButtons() {
     btnNext.style.cursor = '';
 
     if (lastKnownPhase === 'waiting') {
-        btnNext.textContent = 'ゲーム開始 (役職確認へ) ➔';
+        btnNext.textContent = 'ゲーム開始 (役職確認へ)';
     } else if (lastKnownPhase === 'confirm_role') {
         const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
         const nextPeriod = nextStep ? nextStep.period : '次';
-        btnNext.textContent = `[${nextPeriod}] 夜フェーズへ (1日目夜) ➔`;
+        btnNext.textContent = `[${nextPeriod}] 夜フェーズへ (1日目夜)`;
     } else if (lastKnownPhase === 'night') {
         const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
         const nextPeriod = nextStep ? nextStep.period : '次';
-        btnNext.textContent = `[${nextPeriod}] 朝フェーズへ (犠牲者発表) ➔`;
+        btnNext.textContent = `[${nextPeriod}] 朝フェーズへ (犠牲者発表)`;
     } else if (lastKnownPhase === 'morning') {
         const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
         const nextPeriod = nextStep ? nextStep.period : '次';
-        btnNext.textContent = `[${nextPeriod}] 朝を終了して議論を開始する ➔`;
+        btnNext.textContent = `[${nextPeriod}] 朝を終了して議論を開始する`;
     } else if (lastKnownPhase === 'discussion') {
         const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
         const nextPeriod = nextStep ? nextStep.period : '次';
-        btnNext.textContent = `[${nextPeriod}] 投票フェーズへ進む ➔`;
+        btnNext.textContent = `[${nextPeriod}] 投票フェーズへ進む`;
     } else if (lastKnownPhase === 'voting') {
         // 投票中か、結果表示中かで文言を変える
         const voteResultOverlay = document.getElementById('vote-result-overlay');
         if (voteResultOverlay && !voteResultOverlay.classList.contains('hidden')) {
             const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
             if (nextStep) {
-                btnNext.textContent = `[${nextStep.period}] 次の夜フェーズへ進む ➔`;
+                btnNext.textContent = `[${nextStep.period}] 次の夜フェーズへ進む`;
             } else {
-                btnNext.textContent = 'ゲーム終了判定へ ➔';
+                btnNext.textContent = 'ゲーム終了判定へ';
             }
         } else {
-            btnNext.textContent = '🗳️ 投票を強制締め切りする ➔';
+            btnNext.textContent = '投票を強制締め切りする';
         }
     } else if (lastKnownPhase === 'result') {
         btnNext.textContent = 'ゲーム終了 (結果発表中)';
@@ -1614,14 +1675,14 @@ export function initRoleCounters() {
         const row = document.createElement('div');
         row.className = 'role-row';
         row.innerHTML = `
-            <div class="role-name-wrapper" style="display:flex; align-items:center; gap:0.5rem;">
+            <div class="role-name-wrapper">
                 <div class="role-name">${role.name}</div>
-                <button type="button" class="info-icon-btn" onclick="showRoleInfoModal('${role.id}')" style="background:transparent; border:none; color:var(--accent); cursor:pointer; font-size:1rem; padding:0;">ℹ️</button>
+                <button type="button" class="info-icon-btn" onclick="showRoleInfoModal('${role.id}')" aria-label="${role.name}の説明">${iconHtml('i-info')}</button>
             </div>
             <div class="counter-group">
-                <button class="counter-btn" onclick="changeRoleCount('${role.id}', -1)">-</button>
+                <button type="button" class="counter-btn" onclick="changeRoleCount('${role.id}', -1)" aria-label="${role.name}を減らす">-</button>
                 <div id="count-${role.id}" class="role-count-display">0</div>
-                <button class="counter-btn" onclick="changeRoleCount('${role.id}', 1)">+</button>
+                <button type="button" class="counter-btn" onclick="changeRoleCount('${role.id}', 1)" aria-label="${role.name}を増やす">+</button>
             </div>
         `;
         container.appendChild(row);
@@ -1665,12 +1726,12 @@ export function openHelpModal() {
         } else {
             // 未確定（ロビー待機中など）
             myHelpArea.classList.remove('hidden');
-            myHelpContent.innerHTML = '<p style="color:#888; text-align:center; margin: 0.5rem 0;">ゲーム開始後にあなたの役職が表示されます</p>';
+            myHelpContent.innerHTML = '<p class="empty-note">ゲーム開始後にあなたの役職が表示されます</p>';
         }
     } else {
         // 未確定（ロビー待機中など）
         myHelpArea.classList.remove('hidden');
-        myHelpContent.innerHTML = '<p style="color:#888; text-align:center; margin: 0.5rem 0;">ゲーム開始後にあなたの役職が表示されます</p>';
+        myHelpContent.innerHTML = '<p class="empty-note">ゲーム開始後にあなたの役職が表示されます</p>';
     }
 
     // 全役職一覧の描画（アコーディオン形式）
@@ -1689,6 +1750,7 @@ export function openHelpModal() {
         body.className = 'accordion-body hidden';
         body.innerHTML = generateRoleHelpDetailsHtml(role);
 
+        makeKeyboardClickable(header);
         header.onclick = () => {
             const isHidden = body.classList.contains('hidden');
             document.querySelectorAll('.accordion-body').forEach(b => b.classList.add('hidden'));
@@ -1702,6 +1764,18 @@ export function openHelpModal() {
         item.appendChild(header);
         item.appendChild(body);
         accordion.appendChild(item);
+    });
+}
+
+/** div などをボタンのようにキーボード（Enter / Space）でも押せるようにする */
+function makeKeyboardClickable(el) {
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            el.click();
+        }
     });
 }
 
@@ -1741,6 +1815,7 @@ export function showRoleInfoModal(roleId) {
         }
         body.innerHTML = generateRoleHelpDetailsHtml(r);
 
+        makeKeyboardClickable(header);
         header.onclick = () => {
             const isHidden = body.classList.contains('hidden');
             document.querySelectorAll('.accordion-body').forEach(b => b.classList.add('hidden'));

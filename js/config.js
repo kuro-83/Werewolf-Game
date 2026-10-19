@@ -47,14 +47,15 @@ export const GAME_TIMELINE = [
 // =============================================
 // 定数
 // =============================================
+// 上のバーに大きく出すフェーズ名
 export const phaseNames = {
     'waiting': '待機中',
     'confirm_role': '役職確認',
-    'morning': '朝フェーズ',
-    'discussion': '議論中',
-    'voting': '投票中',
-    'night': '夜フェーズ',
-    'result': '終了'
+    'morning': '朝',
+    'discussion': '昼',
+    'voting': '投票',
+    'night': '夜',
+    'result': '結果発表'
 };
 
 export const ROLES_INFO = [
