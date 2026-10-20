@@ -352,8 +352,20 @@
             <div class="sidebar-header">
                 <h3>タイムテーブル</h3>
             </div>
-            <div id="timeline-list" class="timeline-list">
+            <!-- タブ：進行（タイムテーブル）／記録（死亡ログ）。選んだタブは保存しない -->
+            <div class="side-tabs" role="tablist" aria-label="右の列の表示" onkeydown="onSideTabKeydown(event)">
+                <button type="button" id="side-tab-timeline" class="side-tab" role="tab" aria-selected="true"
+                    aria-controls="timeline-list" onclick="switchSideTab('timeline')">進行</button>
+                <button type="button" id="side-tab-log" class="side-tab" role="tab" aria-selected="false" tabindex="-1"
+                    aria-controls="death-log-panel" onclick="switchSideTab('log')">記録<span id="death-log-dot"
+                        class="tab-dot hidden"><span class="visually-hidden">（新しい記録があります）</span></span></button>
+            </div>
+            <div id="timeline-list" class="timeline-list" role="tabpanel" aria-labelledby="side-tab-timeline">
                 <!-- JSでタイムスケジュールが動的に生成されます -->
+            </div>
+            <!-- 死亡ログ（中身は JS の renderDeathLog で入れる） -->
+            <div id="death-log-panel" class="death-log hidden" role="tabpanel" aria-labelledby="side-tab-log">
+                <ol id="death-log-list" class="death-log-list"></ol>
             </div>
         </aside>
     </div>

@@ -18,7 +18,7 @@ import {
     getHideVoteDetails, setHideVoteDetails,
     getCurrentTimelineIndex, setCurrentTimelineIndex,
     getPendingWinner, setPendingWinner,
-    setMorningMessage,
+    getMorningMessage, setMorningMessage, getDeathLog, setDeathLog,
     setMyPlayerName, setMyRoleType, setMyRoleName,
     roleCounts,
     saveSession, restoreSessionData, clearSessionData,
@@ -31,7 +31,7 @@ import {
     updateWolfChatButtonVisibility, updateHideVoteDetailsUI,
     receiveChatMessage, receiveMissionUpdate,
     showVoteResult, checkMyAliveStatus, renderNightActionStatus,
-    showMorningVictims, showMyNightResult,
+    showMorningVictims, showMyNightResult, renderDeathLog, switchSideTab, onSideTabKeydown,
     initRoleCounters, toggleMobileMemo,
     openHelpModal, closeHelpModal, showRoleInfoModal,
     toggleRoleReveal, openWolfChatModal, closeWolfChatModal,
@@ -105,6 +105,8 @@ window.switchGhostViewTo = switchGhostViewTo;
 window.resetMemos = resetMemos;
 window.submitVoteSkip = submitVoteSkip;
 window.changeNightTarget = changeNightTarget;
+window.switchSideTab = switchSideTab;
+window.onSideTabKeydown = onSideTabKeydown;
 
 // roleCounts をwindow経由で ui.js の updateTotalInfo から参照できるように
 window._roleCounts = roleCounts;
@@ -138,7 +140,7 @@ async function loadGameState() {
     try {
         const phaseRes = await supabaseClient
             .from('game_status')
-            .select('current_phase, winner, timeline_index, hide_vote_details, morning_message')
+            .select('*') // death_log の列が無い環境でも取得自体は失敗しないよう、列を指定しない
             .limit(1)
             .single();
         if (phaseRes.error) throw phaseRes.error;
@@ -204,6 +206,10 @@ async function loadGameState() {
         // 朝の犠牲者の記録（朝の画面の表示より前にセットする）
         setMorningMessage(phaseRes.data.morning_message ?? null);
 
+        // 死亡ログ（ページを開いた時点で既にある記録は既読扱い）
+        setDeathLog(phaseRes.data.death_log);
+        renderDeathLog({ markAsSeen: true });
+
         // シークレット投票設定を同期
         if (phaseRes.data.hide_vote_details !== undefined) {
             setHideVoteDetails(!!phaseRes.data.hide_vote_details);
@@ -229,6 +235,22 @@ async function startGameSync() {
         // game_status の更新（フェーズ変更）
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_status' },
             async (payload) => {
+                // 死亡ログだけが増えた更新（フェーズ等は変わっていない）では、画面全体を描き直さない
+                // （夜の選択途中の画面や、めくった役職カードが戻ってしまわないように）
+                const onlyDeathLogChanged =
+                    payload.new.current_phase === getLastKnownPhase() &&
+                    payload.new.timeline_index === getCurrentTimelineIndex() &&
+                    (payload.new.morning_message ?? null) === (getMorningMessage() ?? null) &&
+                    !!payload.new.hide_vote_details === !!getHideVoteDetails() &&
+                    (payload.new.winner ?? null) === (getPendingWinner() ?? null) &&
+                    payload.new.death_log !== undefined &&
+                    JSON.stringify(payload.new.death_log) !== JSON.stringify(getDeathLog());
+                if (onlyDeathLogChanged) {
+                    setDeathLog(payload.new.death_log);
+                    renderDeathLog();
+                    return;
+                }
+
                 if (payload.new.winner) {
                     setPendingWinner(payload.new.winner);
                 }
@@ -243,6 +265,11 @@ async function startGameSync() {
                 // 朝の犠牲者の記録（フェーズと同じ更新で届く。朝の画面の表示より前にセットする）
                 if (payload.new.morning_message !== undefined) {
                     setMorningMessage(payload.new.morning_message);
+                }
+                // 死亡ログ
+                if (payload.new.death_log !== undefined) {
+                    setDeathLog(payload.new.death_log);
+                    renderDeathLog();
                 }
                 await updatePhaseDisplay(payload.new.current_phase);
                 renderTimeline();

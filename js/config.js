@@ -45,6 +45,16 @@ export const GAME_TIMELINE = [
     { period: "終礼", phase: "result", label: "結果発表・ネタばらし" }
 ];
 
+/**
+ * タイムテーブルの行から「何日目か」を取り出す（label の先頭の「N日目」）
+ * @returns {number|null} 取り出せなければ null（ルール説明・結果発表など）
+ */
+export function dayOfTimelineIndex(index) {
+    const step = GAME_TIMELINE[index];
+    const match = step ? step.label.match(/^(\d+)日目/) : null;
+    return match ? Number(match[1]) : null;
+}
+
 // =============================================
 // 定数
 // =============================================

@@ -37,6 +37,7 @@ let _hideVoteDetails = false;   // シークレット投票フラグ
 let _currentTimelineIndex = 0;
 let _pendingWinner = null;
 let _morningMessage = null; // game_status.morning_message（朝の犠牲者の記録。JSON 文字列）
+let _deathLog = [];         // game_status.death_log（死亡ログ。[{ player_id, name, day, cause }]）
 export let roleCounts = { wolf: 0, citizen: 0, seer: 0, medium: 0, knight: 0, teruteru: 0 };
 
 // =============================================
@@ -86,6 +87,9 @@ export const setHideVoteDetails = (v) => { _hideVoteDetails = v; };
 
 export const getCurrentTimelineIndex = () => _currentTimelineIndex;
 export const setCurrentTimelineIndex = (v) => { _currentTimelineIndex = v; };
+
+export const getDeathLog = () => _deathLog;
+export const setDeathLog = (v) => { _deathLog = Array.isArray(v) ? v : []; };
 
 export const getMorningMessage = () => _morningMessage;
 export const setMorningMessage = (v) => { _morningMessage = v; };

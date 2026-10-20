@@ -3,7 +3,7 @@
 // 投票・夜アクション・GM操作・ゲーム進行処理
 // =============================================
 
-import { supabaseClient, GAME_TIMELINE, ROLES_INFO, DUMMY_QUESTIONS } from './config.js';
+import { supabaseClient, GAME_TIMELINE, ROLES_INFO, DUMMY_QUESTIONS, dayOfTimelineIndex } from './config.js';
 import {
     getMyPlayerName, getMyPlayerId, isMyPlayer, getMyRoleType, getMyRoleName,
     getCurrentPlayers, setCurrentPlayers,
@@ -238,6 +238,9 @@ export async function countAndExile() {
         setIsCountingVotes(false);
         return;
     }
+
+    // 死亡ログ：投票による追放（てるてるも含む。処刑なし・スキップのときはここまで来ない）
+    await appendDeathLog({ id: exiledId, name: exiledName }, 'exile');
 
     // てるてるが追放された場合、即座にてるてるの単独勝利としてゲーム終了
     if (isTeruteruExiled) {
@@ -504,6 +507,44 @@ export function changeNightTarget(kind) {
 }
 
 // =============================================
+// 死亡ログ（game_status.death_log）
+// =============================================
+/**
+ * 死亡ログに1件追加する（死亡を確定させるのは GM の端末だけなので、書き手は GM 1人）
+ * 読み込み → 同じ player_id が無ければ末尾に追加 → 書き込み。役職は記録しない（ゲーム中に漏れないように）。
+ * 失敗してもゲームは止めない（列が無い・読めない場合はログが残らないだけ）。
+ * @param {{ id: string, name: string }} player
+ * @param {'attack'|'exile'|'gm'} cause - 襲撃／投票による追放（てるてる含む）／GMの手動追放
+ * @param {number|null} [day] - 何日目か（省略時は今のタイムラインの行から）
+ */
+export async function appendDeathLog(player, cause, day = dayOfTimelineIndex(getCurrentTimelineIndex())) {
+    try {
+        const { data, error } = await supabaseClient
+            .from('game_status')
+            .select('death_log')
+            .eq('id', 1)
+            .maybeSingle();
+        if (error) throw error;
+
+        const log = Array.isArray(data && data.death_log) ? data.death_log : [];
+        if (log.some(entry => String(entry.player_id) === String(player.id))) {
+            console.log(`[DEATH_LOG] ${player.name} は記録済みのためスキップ`);
+            return;
+        }
+
+        const entry = { player_id: player.id, name: player.name, day, cause };
+        const { error: updateError } = await supabaseClient
+            .from('game_status')
+            .update({ death_log: [...log, entry] })
+            .eq('id', 1);
+        if (updateError) throw updateError;
+        console.log('[DEATH_LOG] 記録しました:', entry);
+    } catch (err) {
+        console.error('[DEATH_LOG] 死亡ログの記録に失敗しました（ゲームは続行します）:', err);
+    }
+}
+
+// =============================================
 // 追放処理・キック処理（GM専用）
 // =============================================
 export async function killPlayer(id, name) {
@@ -517,7 +558,9 @@ export async function killPlayer(id, name) {
     } catch (err) {
         console.error('追放エラー:', err);
         alert('追放処理に失敗しました。');
+        return;
     }
+    await appendDeathLog({ id, name }, 'gm');
 }
 
 export async function kickPlayer(id, name) {
@@ -763,6 +806,15 @@ export async function handlePhaseChange(newPhase, newTimelineIndex = null) {
                 if (killErr) throw killErr;
                 console.log(`[WOLF/KNIGHT] handlePhaseChange 襲撃対象を死亡に更新しました (ID: ${victimId})`);
                 morningMessage = JSON.stringify({ victim_ids: [victimId] });
+
+                // 死亡ログ：襲撃。日付はその夜（今のタイムラインはまだ夜の行）
+                const victim = getCurrentPlayers().find(p => String(p.id) === String(victimId));
+                let victimName = victim ? victim.name : null;
+                if (!victimName) {
+                    const { data: victimRow } = await supabaseClient.from('players').select('name').eq('id', victimId).maybeSingle();
+                    victimName = victimRow ? victimRow.name : '不明';
+                }
+                await appendDeathLog({ id: victimId, name: victimName }, 'attack', dayOfTimelineIndex(getCurrentTimelineIndex()));
             } else {
                 console.log('[WOLF/KNIGHT] handlePhaseChange 襲撃は発生しなかったか、騎士によって守られました。');
                 morningMessage = JSON.stringify({ victim_ids: [] });
@@ -859,11 +911,22 @@ export async function resetGame() {
         const chatLog = document.getElementById('wolf-chat-log');
         if (chatLog) chatLog.innerHTML = '';
 
-        // game_status を waiting に戻す
-        const { error: phaseError } = await supabaseClient
+        // game_status を waiting に戻す（死亡ログも空にする）
+        const resetData = { current_phase: 'waiting', winner: null, timeline_index: 0, hide_vote_details: false, morning_message: null, death_log: [] };
+        let { error: phaseError } = await supabaseClient
             .from('game_status')
-            .update({ current_phase: 'waiting', winner: null, timeline_index: 0, hide_vote_details: false, morning_message: null })
+            .update(resetData)
             .eq('id', 1);
+
+        if (phaseError) {
+            // death_log の列が無い等で失敗した場合は、死亡ログ以外を戻す
+            console.warn('death_log 付きのリセットに失敗。death_log なしで再試行します:', phaseError);
+            delete resetData.death_log;
+            ({ error: phaseError } = await supabaseClient
+                .from('game_status')
+                .update(resetData)
+                .eq('id', 1));
+        }
 
         if (phaseError) {
             const { error: fallbackError } = await supabaseClient
@@ -1149,6 +1212,17 @@ export async function joinGame(role) {
 
             const chatLog = document.getElementById('wolf-chat-log');
             if (chatLog) chatLog.innerHTML = '';
+
+            // 死亡ログも空にする（失敗しても部屋づくりは続ける）
+            try {
+                const { error: logError } = await supabaseClient
+                    .from('game_status')
+                    .update({ death_log: [] })
+                    .eq('id', 1);
+                if (logError) console.error('[DEATH_LOG] 死亡ログのリセットに失敗しました:', logError);
+            } catch (logResetErr) {
+                console.error('[DEATH_LOG] 死亡ログのリセットに失敗しました:', logResetErr);
+            }
         } else if (role === 'player') {
             // 同じ名前の人がいると誰が誰か分からなくなるので、参加させない（DB 側に一意制約はない）
             const { data: sameName, error: sameNameError } = await supabaseClient

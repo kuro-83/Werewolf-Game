@@ -5,7 +5,7 @@
 
 import { supabaseClient } from './config.js';
 import { setLightForPhase } from './theme.js';
-import { GAME_TIMELINE, phaseNames, ROLES_INFO, ROLE_BADGE_CLASS, NIGHT_ACTION_ROLES, DUMMY_QUESTIONS } from './config.js';
+import { GAME_TIMELINE, phaseNames, ROLES_INFO, ROLE_BADGE_CLASS, NIGHT_ACTION_ROLES, DUMMY_QUESTIONS, dayOfTimelineIndex } from './config.js';
 import {
     getMyPlayerName, getMyPlayerId, isMyPlayer, getMyRoleType, getMyRoleName, setMyRoleName,
     getCurrentPlayers, setCurrentPlayers, setCurrentPlayersCount,
@@ -19,7 +19,7 @@ import {
     getCurrentTimelineIndex,
     getPendingWinner,
     getDummyNightState, clearDummyNightState,
-    getMorningMessage,
+    getMorningMessage, getDeathLog,
     playerListArea, myRoleArea, roleSettingsArea, gmHint, playerList, phaseElement
 } from './state.js';
 
@@ -1046,10 +1046,24 @@ export async function renderResultPlayerList() {
     const listEl = document.getElementById('result-player-list');
     listEl.innerHTML = '<p class="empty-note">読み込み中...</p>';
 
+    // 死亡ログは結果発表の直前に取り直す（取れなければ手元の値を使う）
+    let deathLog = getDeathLog();
+    try {
+        const { data: statusRow, error: logError } = await supabaseClient
+            .from('game_status')
+            .select('death_log')
+            .eq('id', 1)
+            .maybeSingle();
+        if (logError) throw logError;
+        if (statusRow && Array.isArray(statusRow.death_log)) deathLog = statusRow.death_log;
+    } catch (logErr) {
+        console.error('[DEATH_LOG] 結果発表用の死亡ログの取得に失敗しました:', logErr);
+    }
+
     try {
         const { data: players, error } = await supabaseClient
             .from('players')
-            .select('name, is_alive, role')
+            .select('id, name, is_alive, role')
             .order('name', { ascending: true });
 
         if (error) throw error;
@@ -1089,10 +1103,11 @@ export async function renderResultPlayerList() {
             }
             item.appendChild(nameDiv);
 
-            // 死亡の日・理由は DB に記録がないため「生存／死亡」だけを出す
+            // 死亡ログから「1日目の夜に襲撃」「2日目に追放」など。ログに無い死亡者は「死亡」
             const status = document.createElement('span');
             status.className = `result-status${p.is_alive ? '' : ' is-dead'}`;
-            status.textContent = p.is_alive ? '生存' : '死亡';
+            const deathEntry = deathLog.find(entry => String(entry.player_id) === String(p.id));
+            status.textContent = p.is_alive ? '生存' : (deathEntry ? deathStatusText(deathEntry) : '死亡');
             item.appendChild(status);
 
             listEl.appendChild(item);
@@ -1563,8 +1578,8 @@ export function renderTimeline() {
     const phaseSub = document.getElementById('phase-sub');
     const currentStep = GAME_TIMELINE[currentTimelineIndex];
     if (phaseSub && currentStep) {
-        const dayMatch = currentStep.label.match(/^(\d+)日目/);
-        phaseSub.textContent = dayMatch ? `${dayMatch[1]}日目・${currentStep.period}` : currentStep.period;
+        const day = dayOfTimelineIndex(currentTimelineIndex);
+        phaseSub.textContent = day !== null ? `${day}日目・${currentStep.period}` : currentStep.period;
     }
 
     GAME_TIMELINE.forEach((step, idx) => {
@@ -1596,6 +1611,107 @@ export function renderTimeline() {
             }, 100);
         }
     });
+}
+
+// =============================================
+// 右の列のタブ（進行／記録）と死亡ログ
+// =============================================
+let activeSideTab = 'timeline';
+// 「記録」タブで見たことにした件数（これより増えたらタブに丸を出す）
+let deathLogSeenCount = 0;
+
+const DEATH_CAUSE_TEXT = { attack: '襲撃', exile: '追放', gm: 'GMにより追放' };
+
+/** 記録の日付欄（襲撃は「N日目の夜」、それ以外は「N日目」、日付不明は「—」） */
+function deathDayLabel(entry) {
+    if (entry.day === null || entry.day === undefined) return '—';
+    return entry.cause === 'attack' ? `${entry.day}日目の夜` : `${entry.day}日目`;
+}
+
+/** 結果発表の各行の右側（「1日目の夜に襲撃」「2日目に追放」「2日目にGMが追放」） */
+function deathStatusText(entry) {
+    const hasDay = entry.day !== null && entry.day !== undefined;
+    if (entry.cause === 'attack') return hasDay ? `${entry.day}日目の夜に襲撃` : '襲撃';
+    if (entry.cause === 'exile') return hasDay ? `${entry.day}日目に追放` : '追放';
+    if (entry.cause === 'gm') return hasDay ? `${entry.day}日目にGMが追放` : 'GMが追放';
+    return '死亡';
+}
+
+export function switchSideTab(tab) {
+    activeSideTab = tab === 'log' ? 'log' : 'timeline';
+    const isLog = activeSideTab === 'log';
+
+    const tabTimeline = document.getElementById('side-tab-timeline');
+    const tabLog = document.getElementById('side-tab-log');
+    if (tabTimeline && tabLog) {
+        tabTimeline.setAttribute('aria-selected', String(!isLog));
+        tabLog.setAttribute('aria-selected', String(isLog));
+        tabTimeline.tabIndex = isLog ? -1 : 0;
+        tabLog.tabIndex = isLog ? 0 : -1;
+    }
+    document.getElementById('timeline-list')?.classList.toggle('hidden', isLog);
+    document.getElementById('death-log-panel')?.classList.toggle('hidden', !isLog);
+
+    // 「記録」を開いたら既読にして丸を消す
+    if (isLog) {
+        deathLogSeenCount = getDeathLog().length;
+        document.getElementById('death-log-dot')?.classList.add('hidden');
+    }
+}
+
+/** タブを左右キーでも切り替えられるようにする */
+export function onSideTabKeydown(e) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const next = activeSideTab === 'log' ? 'timeline' : 'log';
+    switchSideTab(next);
+    document.getElementById(next === 'log' ? 'side-tab-log' : 'side-tab-timeline')?.focus();
+}
+
+/**
+ * 死亡ログ（「記録」タブ）を描画する
+ * 新しい記録が増えたとき「記録」タブを開いていなければ、タブに丸を出す（全員の画面で同じタイミングで出る）
+ * @param {{ markAsSeen?: boolean }} [options] - markAsSeen: 今ある記録を既読扱いにする（ページを開いたとき）
+ */
+export function renderDeathLog({ markAsSeen = false } = {}) {
+    const list = document.getElementById('death-log-list');
+    if (!list) return;
+    const log = getDeathLog();
+
+    list.innerHTML = '';
+    if (log.length === 0) {
+        list.innerHTML = '<li class="death-log-empty">まだ誰も脱落していません</li>';
+    } else {
+        log.forEach(entry => {
+            const li = document.createElement('li');
+            li.className = 'death-log-item';
+
+            const daySpan = document.createElement('span');
+            daySpan.className = 'death-log-day';
+            daySpan.textContent = deathDayLabel(entry);
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'death-log-text';
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'death-log-name';
+            nameSpan.textContent = `${entry.name}さん`;
+            const causeSpan = document.createElement('span');
+            causeSpan.className = 'death-log-cause';
+            causeSpan.textContent = DEATH_CAUSE_TEXT[entry.cause] || '脱落';
+            textSpan.appendChild(nameSpan);
+            textSpan.appendChild(causeSpan);
+
+            li.appendChild(daySpan);
+            li.appendChild(textSpan);
+            list.appendChild(li);
+        });
+    }
+
+    // 既読の件数を更新（記録タブを開いている・ページを開いた直後・リセットで減ったとき）
+    if (markAsSeen || activeSideTab === 'log' || log.length < deathLogSeenCount) {
+        deathLogSeenCount = log.length;
+    }
+    document.getElementById('death-log-dot')?.classList.toggle('hidden', log.length <= deathLogSeenCount);
 }
 
 export function updateGmTimelineButtons() {

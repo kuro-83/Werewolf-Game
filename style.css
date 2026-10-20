@@ -2125,3 +2125,93 @@ html[data-light="day"] .light-icon-day {
         animation: none;
     }
 }
+
+/* =============================================
+   右の列のタブ（進行／記録）と死亡ログ
+   ============================================= */
+.side-tabs {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 0.8rem;
+    border-bottom: 1px solid var(--line);
+}
+
+.side-tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 36px;
+    padding: 0 0.8rem;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    color: var(--text-dim);
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+}
+
+.side-tab:hover {
+    color: var(--text);
+}
+
+/* 選択中：文字を明るく＋下線（色だけで示さない） */
+.side-tab[aria-selected="true"] {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+}
+
+/* 新しい記録があることを示す小さな丸 */
+.tab-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+.death-log-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.death-log-item {
+    display: grid;
+    grid-template-columns: 5.6em minmax(0, 1fr);
+    gap: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.84rem;
+}
+
+.death-log-day {
+    color: var(--text-dim);
+    font-size: 0.76rem;
+    padding-top: 0.1rem;
+}
+
+.death-log-text {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.6rem;
+}
+
+.death-log-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.death-log-cause {
+    color: var(--text-dim);
+}
+
+.death-log-empty {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    padding: 0.6rem;
+}
