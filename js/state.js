@@ -3,6 +3,8 @@
 // ゲームの状態変数管理（getter/setter経由で共有）
 // =============================================
 
+import { TIMELINES } from './config.js';
+
 // =============================================
 // DOM 参照（ゲーム画面以降で使用するもの）
 // =============================================
@@ -37,6 +39,9 @@ let _hideVoteDetails = false;   // シークレット投票フラグ
 let _currentTimelineIndex = 0;
 let _pendingWinner = null;
 let _morningMessage = null; // game_status.morning_message（朝の犠牲者の記録。JSON 文字列）
+let _gameMode = 'school';   // game_status.game_mode（'school'＝休み時間に1日かけて／'fifty'＝50分で1ゲーム）
+let _phaseEndsAt = null;    // game_status.phase_ends_at（今のフェーズの終了予定時刻。ISO 文字列 or null）
+let _gameStartedAt = null;  // GM の端末だけ：ゲーム開始（役職確認に入った）時刻（ミリ秒）。DB には保存しない
 let _deathLog = [];         // game_status.death_log（死亡ログ。[{ player_id, name, day, cause }]）
 export let roleCounts = { wolf: 0, citizen: 0, seer: 0, medium: 0, knight: 0, teruteru: 0 };
 
@@ -87,6 +92,17 @@ export const setHideVoteDetails = (v) => { _hideVoteDetails = v; };
 
 export const getCurrentTimelineIndex = () => _currentTimelineIndex;
 export const setCurrentTimelineIndex = (v) => { _currentTimelineIndex = v; };
+
+export const getGameMode = () => _gameMode;
+export const setGameMode = (v) => { _gameMode = v === 'fifty' ? 'fifty' : 'school'; };
+/** 今のモードのタイムテーブル */
+export const getTimeline = () => TIMELINES[_gameMode] || TIMELINES.school;
+
+export const getPhaseEndsAt = () => _phaseEndsAt;
+export const setPhaseEndsAt = (v) => { _phaseEndsAt = v || null; };
+
+export const getGameStartedAt = () => _gameStartedAt;
+export const setGameStartedAt = (v) => { _gameStartedAt = v; };
 
 export const getDeathLog = () => _deathLog;
 export const setDeathLog = (v) => { _deathLog = Array.isArray(v) ? v : []; };

@@ -107,7 +107,11 @@
                     <svg class="icon light-icon light-icon-morning"><use href="#i-sunrise" /></svg>
                     <svg class="icon light-icon light-icon-day"><use href="#i-sun" /></svg>
                 </span>
-                <div id="current-phase" class="phase-name">読込中...</div>
+                <div class="phase-line">
+                    <div id="current-phase" class="phase-name">読込中...</div>
+                    <!-- 50分モードの残り時間（全員同じ表示。phase_ends_at が無ければ出さない） -->
+                    <div id="phase-timer" class="phase-timer hidden"></div>
+                </div>
                 <div id="phase-sub" class="phase-sub"></div>
             </div>
             <div class="topbar-right">
@@ -181,7 +185,21 @@
 
             <!-- 待機中：役職設定 (GM専用) -->
             <section id="role-settings-area" class="panel role-settings hidden">
-                <h3 class="panel-title">役職バランス設定</h3>
+                <!-- 進め方（待機中だけ選べる。全員のタイムテーブルが切り替わる） -->
+                <h3 class="panel-title">進め方</h3>
+                <div class="mode-select" role="group" aria-label="進め方">
+                    <button type="button" class="mode-option" data-game-mode="school" aria-pressed="true"
+                        onclick="selectGameMode('school')">休み時間に1日かけて</button>
+                    <button type="button" class="mode-option" data-game-mode="fifty" aria-pressed="false"
+                        onclick="selectGameMode('fifty')">50分で1ゲーム</button>
+                </div>
+
+                <div class="role-settings-head">
+                    <h3 class="panel-title">役職バランス設定</h3>
+                    <!-- 50分モードのときだけ -->
+                    <button type="button" id="btn-recommend-roles" class="btn-secondary btn-small hidden"
+                        onclick="applyRecommendedRoles()">おすすめ配役にする</button>
+                </div>
                 <div id="role-counters"></div>
                 <div id="total-info" class="total-info total-error">
                     現在の設定: 計 <span id="total-role-count">0</span> 人 / 参加者: <span id="total-player-count">0</span> 人
@@ -216,10 +234,14 @@
             <!-- GMパネル -->
             <section id="gm-panel" class="panel gm-panel hidden">
                 <h3 class="panel-title">GM コントロールパネル</h3>
+                <!-- 50分モード：ゲーム開始（役職確認に入った時刻）からの経過。GM の端末の中だけで数える -->
+                <div id="gm-elapsed" class="gm-elapsed hidden"></div>
                 <div class="gm-controls">
                     <button id="btn-next-step" class="btn-primary btn-block" onclick="advanceTimeline(1)">次のフェーズへ進む</button>
                     <div class="gm-controls-row">
                         <button id="btn-prev-step" class="btn-secondary btn-small" onclick="advanceTimeline(-1)">1手戻る</button>
+                        <!-- 50分モードでタイマーがあるフェーズだけ -->
+                        <button id="btn-extend-timer" class="btn-secondary btn-small hidden" onclick="extendPhaseTimer(60)">＋1分</button>
                         <!-- 強制終了（ロビーへ戻る） -->
                         <button id="btn-reset" class="btn-secondary btn-small btn-danger" onclick="resetGame()">ゲーム強制終了</button>
                     </div>

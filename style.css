@@ -2215,3 +2215,174 @@ html[data-light="day"] .light-icon-day {
     font-size: 0.85rem;
     padding: 0.6rem;
 }
+
+/* =============================================
+   50分モード：タイマー・進め方・GM の時間まわり
+   ============================================= */
+.phase-line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.7rem;
+}
+
+.phase-timer {
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
+/* 残り30秒以下・時間切れ：アクセント色 */
+.phase-timer.is-urgent {
+    color: var(--accent);
+}
+
+.mode-select {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.mode-option {
+    min-height: 48px;
+    padding: 0 0.8rem;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    color: var(--text-dim);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.mode-option:hover {
+    background: var(--surface);
+}
+
+/* 選択中：アクセント色の枠＋明るい文字（色だけで示さない） */
+.mode-option[aria-pressed="true"] {
+    border: 2px solid var(--accent);
+    color: var(--text);
+    background: var(--surface);
+}
+
+.role-settings-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.role-settings-head .panel-title {
+    margin: 0;
+}
+
+.gm-elapsed {
+    color: var(--text-dim);
+    font-size: 0.88rem;
+    margin: -0.4rem 0 0.8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* 時間切れ：「次のフェーズへ進む」を目立たせる */
+.btn-primary.is-timeup {
+    box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--accent);
+}
+
+.timeline-duration {
+    margin-left: 0.4rem;
+    font-weight: 500;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+}
+
+/* =============================================
+   23人で遊ぶとき：小さい名前カード（13枚以上）と、一覧の中だけのスクロール
+   ============================================= */
+@media (min-width: 769px) {
+    .target-list.is-dense {
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    /* 名前は1行、長い名前は「…」で省略 */
+    .target-list.is-dense .target-btn {
+        display: block;
+        aspect-ratio: auto;
+        height: 64px;
+        padding: 0 9px;
+        line-height: 64px;
+        font-size: 0.95rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .target-list.is-dense .target-btn.selected,
+    .target-list.is-dense .target-btn.ghost-selected {
+        transform: translateY(-6px);
+    }
+
+    /* カードの多い夜・投票のパネルは余白を少し詰める */
+    .night-panel:has(.target-list.is-dense) {
+        gap: 0.65rem;
+        padding-top: 1.1rem;
+        padding-bottom: 1.1rem;
+    }
+
+    /* カードの多い投票では「投票」と「今日は誰も追放しない」を横に並べる */
+    .night-panel:has(.target-list.is-dense) .vote-actions {
+        flex-direction: row;
+        width: min(620px, 100%);
+    }
+
+    .night-panel:has(.target-list.is-dense) .vote-actions > button {
+        flex: 1 1 0;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+    .target-list.is-dense {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+}
+
+/* 左右の列は、ページを伸ばさずに列の中だけスクロール（上のバーなどの高さぶん縮める） */
+@media (min-width: 769px) {
+    .sidebar {
+        max-height: calc(100vh - var(--chrome-h, 0px));
+    }
+}
+
+/* 人数で長くなる一覧は、その中だけスクロール */
+.result-player-list {
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+.vote-result-list {
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.night-status-list {
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.player-list {
+    max-height: 50vh;
+    overflow-y: auto;
+    padding: 6px 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .target-list.is-dense .target-btn.selected,
+    .target-list.is-dense .target-btn.ghost-selected {
+        transform: none;
+    }
+}

@@ -5,7 +5,7 @@
 
 import { supabaseClient } from './config.js';
 import { setLightForPhase } from './theme.js';
-import { GAME_TIMELINE, phaseNames, ROLES_INFO, ROLE_BADGE_CLASS, NIGHT_ACTION_ROLES, DUMMY_QUESTIONS, dayOfTimelineIndex } from './config.js';
+import { phaseNames, DENSE_CARD_COUNT, ROLES_INFO, ROLE_BADGE_CLASS, NIGHT_ACTION_ROLES, DUMMY_QUESTIONS, dayOfTimelineIndex } from './config.js';
 import {
     getMyPlayerName, getMyPlayerId, isMyPlayer, getMyRoleType, getMyRoleName, setMyRoleName,
     getCurrentPlayers, setCurrentPlayers, setCurrentPlayersCount,
@@ -17,6 +17,7 @@ import {
     getVoteCountdownTimer, setVoteCountdownTimer,
     getHideVoteDetails,
     getCurrentTimelineIndex,
+    getTimeline, getGameMode, getPhaseEndsAt, getGameStartedAt,
     getPendingWinner,
     getDummyNightState, clearDummyNightState,
     getMorningMessage, getDeathLog,
@@ -657,6 +658,7 @@ function renderGhostViewFor(playerName) {
                         return p.is_alive && p.name !== target.name;
                     });
 
+                    listEl.classList.toggle('is-dense', candidates.length >= DENSE_CARD_COUNT);
                     if (candidates.length === 0) {
                         listEl.innerHTML = '<p class="empty-note">対象なし</p>';
                     } else {
@@ -1002,7 +1004,9 @@ export async function showResultScreen() {
     }
 
     const isCitizen = winner === 'citizen';
-    const isWolf = winner === 'wolf';
+    // 'wolf_timeout'（50分モードの時間切れ）も人狼の勝ちとして扱う
+    const isTimeout = winner === 'wolf_timeout';
+    const isWolf = winner === 'wolf' || isTimeout;
     const isTeruteru = winner === 'teruteru' || winner === 'てるてる';
 
     // 結果発表は昼の照明
@@ -1029,7 +1033,7 @@ export async function showResultScreen() {
     } else {
         document.getElementById('result-subtitle').textContent = isCitizen
             ? '人狼を全員追放しました'
-            : '人狼の数が村人の数に並びました';
+            : (isTimeout ? '時間切れ。人狼が最後まで逃げ切った' : '人狼の数が村人の数に並びました');
     }
 
     await renderResultPlayerList();
@@ -1164,6 +1168,8 @@ export function renderVoteTargets() {
     if (skipBtn) skipBtn.disabled = false;
 
     const targets = getCurrentPlayers().filter(p => p.is_alive && !isMyPlayer(p));
+    // 13枚以上なら小さいカードに（投票できる全員に同じ枚数が出る）
+    list.classList.toggle('is-dense', targets.length >= DENSE_CARD_COUNT);
 
     if (targets.length === 0) {
         list.innerHTML = '<p class="empty-note">投票できるプレイヤーがいません</p>';
@@ -1576,13 +1582,16 @@ export function renderTimeline() {
 
     // 上のバーのフェーズ名の下に「○日目・時限」を小さく出す
     const phaseSub = document.getElementById('phase-sub');
-    const currentStep = GAME_TIMELINE[currentTimelineIndex];
+    const currentStep = getTimeline()[currentTimelineIndex];
     if (phaseSub && currentStep) {
-        const day = dayOfTimelineIndex(currentTimelineIndex);
-        phaseSub.textContent = day !== null ? `${day}日目・${currentStep.period}` : currentStep.period;
+        const day = dayOfTimelineIndex(currentTimelineIndex, getTimeline());
+        // 50分モードは区切り自体が「2日目」なので重ねない
+        phaseSub.textContent = day !== null && currentStep.period !== `${day}日目`
+            ? `${day}日目・${currentStep.period}`
+            : currentStep.period;
     }
 
-    GAME_TIMELINE.forEach((step, idx) => {
+    getTimeline().forEach((step, idx) => {
         const item = document.createElement('div');
         item.id = `timeline-item-${idx}`;
 
@@ -1597,9 +1606,11 @@ export function renderTimeline() {
 
         item.className = `timeline-item ${stateClass}`;
 
+        // 50分モードは各行に目安の時間を小さく添える
+        const duration = step.seconds ? `<span class="timeline-duration">${step.seconds / 60}分</span>` : '';
         item.innerHTML = `
             <div class="timeline-period-badge">${step.period}</div>
-            <div class="timeline-label-text">${step.label}</div>
+            <div class="timeline-label-text">${step.label}${duration}</div>
         `;
 
         listEl.appendChild(item);
@@ -1714,6 +1725,92 @@ export function renderDeathLog({ markAsSeen = false } = {}) {
     document.getElementById('death-log-dot')?.classList.toggle('hidden', log.length <= deathLogSeenCount);
 }
 
+// =============================================
+// 50分モード：進め方の表示・タイマー
+// =============================================
+/** GM パネルの「進め方」の選択中表示と「おすすめ配役にする」ボタンの出し分け */
+export function renderGameModeControls() {
+    const mode = getGameMode();
+    document.querySelectorAll('.mode-option').forEach(btn => {
+        btn.setAttribute('aria-pressed', String(btn.dataset.gameMode === mode));
+    });
+    document.getElementById('btn-recommend-roles')?.classList.toggle('hidden', mode !== 'fifty');
+}
+
+let phaseTimerId = null;
+
+/**
+ * 左右の列の高さを「画面の高さ − 上のバー（と霊界カメラ）」にするため、その高さを CSS 変数 --chrome-h に入れる
+ * （列の中だけスクロールさせ、ページ全体が伸びないようにする）
+ */
+function watchChromeHeight() {
+    const update = () => {
+        const topbar = document.querySelector('.topbar');
+        const ghost = document.getElementById('ghost-camera-header');
+        const h = (topbar ? topbar.offsetHeight : 0) + (ghost && !ghost.classList.contains('hidden') ? ghost.offsetHeight : 0);
+        document.documentElement.style.setProperty('--chrome-h', `${h}px`);
+    };
+    update();
+    if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(update);
+        document.querySelectorAll('.topbar, #ghost-camera-header').forEach(el => ro.observe(el));
+    }
+    window.addEventListener('resize', update);
+}
+
+/** 1秒ごとにタイマーを描き直す（一度だけ始める） */
+export function startPhaseTimer() {
+    if (phaseTimerId) return;
+    watchChromeHeight();
+    phaseTimerId = setInterval(updatePhaseTimer, 1000);
+    updatePhaseTimer();
+}
+
+/**
+ * 上のバーの「残り 3:42」と、GM パネルのタイマー関係（＋1分・時間切れの強調・経過時間）を描く
+ * 残りは phase_ends_at と自分の端末の時計の差。自動では進めない（進めるのは GM のボタン）
+ */
+export function updatePhaseTimer() {
+    const timerEl = document.getElementById('phase-timer');
+    const endsAt = getPhaseEndsAt();
+    const phase = getLastKnownPhase();
+    const isFifty = getGameMode() === 'fifty';
+    const endsAtMs = endsAt ? Date.parse(endsAt) : NaN;
+    const hasTimer = isFifty && !Number.isNaN(endsAtMs) && phase !== 'waiting' && phase !== 'result';
+    const remaining = hasTimer ? Math.ceil((endsAtMs - Date.now()) / 1000) : null;
+    const isOver = hasTimer && remaining <= 0;
+
+    if (timerEl) {
+        timerEl.classList.toggle('hidden', !hasTimer);
+        timerEl.classList.toggle('is-urgent', hasTimer && remaining <= 30);
+        if (hasTimer) {
+            if (isOver) {
+                timerEl.textContent = '時間です';
+            } else {
+                const m = Math.floor(remaining / 60);
+                const sec = String(remaining % 60).padStart(2, '0');
+                timerEl.textContent = `残り ${m}:${sec}`;
+            }
+        }
+    }
+
+    if (getMyRoleType() !== 'gm') return;
+
+    // 「＋1分」はタイマーがあるフェーズだけ
+    document.getElementById('btn-extend-timer')?.classList.toggle('hidden', !hasTimer);
+    // 時間切れになったら「次のフェーズへ進む」を目立たせる
+    document.getElementById('btn-next-step')?.classList.toggle('is-timeup', isOver);
+
+    // ゲーム開始からの経過（GM の端末の中だけで数える。リロードすると消える）
+    const elapsedEl = document.getElementById('gm-elapsed');
+    const startedAt = getGameStartedAt();
+    const showElapsed = isFifty && startedAt && phase !== 'waiting';
+    if (elapsedEl) {
+        elapsedEl.classList.toggle('hidden', !showElapsed);
+        if (showElapsed) elapsedEl.textContent = `ゲーム開始から ${Math.floor((Date.now() - startedAt) / 60000)}分`;
+    }
+}
+
 export function updateGmTimelineButtons() {
     const btnNext = document.getElementById('btn-next-step');
     const btnPrev = document.getElementById('btn-prev-step');
@@ -1746,26 +1843,26 @@ export function updateGmTimelineButtons() {
     if (lastKnownPhase === 'waiting') {
         btnNext.textContent = 'ゲーム開始 (役職確認へ)';
     } else if (lastKnownPhase === 'confirm_role') {
-        const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+        const nextStep = getTimeline()[currentTimelineIndex + 1];
         const nextPeriod = nextStep ? nextStep.period : '次';
         btnNext.textContent = `[${nextPeriod}] 夜フェーズへ (1日目夜)`;
     } else if (lastKnownPhase === 'night') {
-        const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+        const nextStep = getTimeline()[currentTimelineIndex + 1];
         const nextPeriod = nextStep ? nextStep.period : '次';
         btnNext.textContent = `[${nextPeriod}] 朝フェーズへ (犠牲者発表)`;
     } else if (lastKnownPhase === 'morning') {
-        const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+        const nextStep = getTimeline()[currentTimelineIndex + 1];
         const nextPeriod = nextStep ? nextStep.period : '次';
         btnNext.textContent = `[${nextPeriod}] 朝を終了して議論を開始する`;
     } else if (lastKnownPhase === 'discussion') {
-        const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+        const nextStep = getTimeline()[currentTimelineIndex + 1];
         const nextPeriod = nextStep ? nextStep.period : '次';
         btnNext.textContent = `[${nextPeriod}] 投票フェーズへ進む`;
     } else if (lastKnownPhase === 'voting') {
         // 投票中か、結果表示中かで文言を変える
         const voteResultOverlay = document.getElementById('vote-result-overlay');
         if (voteResultOverlay && !voteResultOverlay.classList.contains('hidden')) {
-            const nextStep = GAME_TIMELINE[currentTimelineIndex + 1];
+            const nextStep = getTimeline()[currentTimelineIndex + 1];
             if (nextStep) {
                 btnNext.textContent = `[${nextStep.period}] 次の夜フェーズへ進む`;
             } else {

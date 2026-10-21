@@ -3,7 +3,7 @@
 // 投票・夜アクション・GM操作・ゲーム進行処理
 // =============================================
 
-import { supabaseClient, GAME_TIMELINE, ROLES_INFO, DUMMY_QUESTIONS, dayOfTimelineIndex } from './config.js';
+import { supabaseClient, ROLES_INFO, DUMMY_QUESTIONS, dayOfTimelineIndex, DENSE_CARD_COUNT } from './config.js';
 import {
     getMyPlayerName, getMyPlayerId, isMyPlayer, getMyRoleType, getMyRoleName,
     getCurrentPlayers, setCurrentPlayers,
@@ -15,6 +15,7 @@ import {
     getVoteCountdownTimer, setVoteCountdownTimer,
     getHideVoteDetails, setHideVoteDetails,
     getCurrentTimelineIndex, setCurrentTimelineIndex,
+    getTimeline, getGameMode, getPhaseEndsAt, setPhaseEndsAt, getGameStartedAt, setGameStartedAt,
     getPendingWinner, setPendingWinner,
     roleCounts, saveSession, clearSessionData,
     getDummyNightState, saveDummyNightState,
@@ -201,6 +202,7 @@ export async function countAndExile() {
     if (skipCount > 0 && skipCount >= maxPlayerVotes) {
         // 処刑なしルート
         console.log(`[VOTE] スキップ票 ${skipCount}票が最多のため追放なし`);
+        await settleIfFinalVote(freshPlayers);
         showVoteResult(null, voteLog);  // exiledName = null で処刑なしとして表示
         return;
     }
@@ -211,6 +213,7 @@ export async function countAndExile() {
     if (Object.keys(voteCounts).length === 0) {
         // 有効票が0票（全員スキップまたは棄権） → 処刑なし
         console.log('[VOTE] 有効票。0。追放なし。');
+        await settleIfFinalVote(freshPlayers);
         showVoteResult(null, voteLog);
         return;
     } else {
@@ -250,8 +253,37 @@ export async function countAndExile() {
         return;
     }
 
+    // 50分モードの最後の投票なら、ここで勝敗を決める（追放された人は死亡として数える）
+    await settleIfFinalVote(freshPlayers.map(p => p.id === exiledId ? { ...p, is_alive: false } : p));
+
     // GMは直接リザルトを表示（他クライアントは is_alive の Realtime イベントから呼ばれる）
     showVoteResult(exiledName, voteLog);
+}
+
+/**
+ * 50分モードの最後の投票（finalVote の行）の集計が終わった時点で、勝敗が決まっていなければ決める
+ * 人狼0 → 村人の勝ち、人狼 ≧ それ以外 → 人狼の勝ち、それ以外 → 時間切れで人狼の勝ち（'wolf_timeout'）
+ * school モードや、最後の投票以外では何もしない。てるてるの追放は countAndExile の中で先に終わっている
+ * @param {object[]} players - 集計後の全プレイヤー（追放された人は is_alive: false にしたもの）
+ */
+async function settleIfFinalVote(players) {
+    if (getGameMode() !== 'fifty') return;
+    const step = getTimeline()[getCurrentTimelineIndex()];
+    if (!step || !step.finalVote) return;
+    if (getPendingWinner()) return;
+
+    const alive = players.filter(p => p.is_alive);
+    const aliveWolves = alive.filter(p => p.role === '人狼').length;
+    const aliveOthers = alive.length - aliveWolves;
+
+    if (aliveWolves === 0) {
+        await triggerGameEnd('citizen');
+    } else if (aliveWolves >= aliveOthers) {
+        await triggerGameEnd('wolf');
+    } else {
+        console.log('[TIMEOUT] 最後の投票が終わっても人狼が残っているため、時間切れで人狼の勝ち');
+        await triggerGameEnd('wolf_timeout');
+    }
 }
 
 // =============================================
@@ -343,6 +375,8 @@ function renderNightChoices(kind, listId, btnId) {
     }
 
     const choices = getNightChoices(kind);
+    // 13枚以上なら小さいカードに（枚数は全員同じリストから数えるので、役職で見た目は変わらない）
+    list.classList.toggle('is-dense', choices.length >= DENSE_CARD_COUNT);
 
     if (choices.length === 0) {
         list.innerHTML = '<p class="empty-note">選べるプレイヤーがいません</p>';
@@ -507,6 +541,80 @@ export function changeNightTarget(kind) {
 }
 
 // =============================================
+// 進め方（50分モード）・おすすめ配役・タイマー延長（GM専用）
+// =============================================
+/** 進め方を切り替える（待機中のみ）。全員の画面のタイムテーブルは Realtime で切り替わる */
+export async function selectGameMode(mode) {
+    if (getMyRoleType() !== 'gm') return;
+    if (getLastKnownPhase() !== 'waiting') return; // ゲーム開始後は変更できない
+    const nextMode = mode === 'fifty' ? 'fifty' : 'school';
+    if (nextMode === getGameMode()) return;
+    try {
+        const { error } = await supabaseClient
+            .from('game_status')
+            .update({ game_mode: nextMode })
+            .eq('id', 1);
+        if (error) throw error;
+    } catch (err) {
+        console.error('[MODE] 進め方の切り替えに失敗しました:', err);
+        alert('進め方の切り替えに失敗しました。');
+    }
+}
+
+/**
+ * 参加人数からおすすめの配役を計算する（50分モード用）
+ * 人狼：8人以下→1、9〜14人→2、15人以上→3／預言者・霊媒師・騎士：7人以上で各1／てるてる：12人以上で1／市民：残り
+ */
+export function recommendedRoleCounts(playerCount) {
+    const n = Math.max(0, playerCount);
+    const wolf = n <= 8 ? 1 : (n <= 14 ? 2 : 3);
+    const special = n >= 7 ? 1 : 0;
+    const teruteru = n >= 12 ? 1 : 0;
+    const used = wolf + special * 3 + teruteru;
+    return {
+        wolf: Math.min(wolf, n),
+        seer: special,
+        medium: special,
+        knight: special,
+        teruteru,
+        citizen: Math.max(0, n - used)
+    };
+}
+
+/** 「おすすめ配役にする」：今の参加人数に合わせて役職数を入れる（あとから手で増減できる） */
+export function applyRecommendedRoles() {
+    if (getMyRoleType() !== 'gm' || getLastKnownPhase() !== 'waiting') return;
+    const counts = recommendedRoleCounts(getCurrentPlayers().length);
+    Object.keys(roleCounts).forEach(id => {
+        roleCounts[id] = counts[id] || 0;
+        const el = document.getElementById(`count-${id}`);
+        if (el) el.textContent = roleCounts[id];
+    });
+    window._roleCounts = roleCounts;
+    _updateTotalInfoDirect();
+}
+
+/** 「＋1分」：今のフェーズの終了予定時刻を1分延ばす（既に過ぎていれば今から1分） */
+export async function extendPhaseTimer(seconds = 60) {
+    if (getMyRoleType() !== 'gm') return;
+    const current = getPhaseEndsAt();
+    if (!current) return;
+    const base = Math.max(Date.now(), Date.parse(current) || 0);
+    const next = new Date(base + seconds * 1000).toISOString();
+    try {
+        const { error } = await supabaseClient
+            .from('game_status')
+            .update({ phase_ends_at: next })
+            .eq('id', 1);
+        if (error) throw error;
+        setPhaseEndsAt(next); // 自分の画面にはすぐ反映（他の人には Realtime で届く）
+    } catch (err) {
+        console.error('[TIMER] 時間の延長に失敗しました:', err);
+        alert('時間の延長に失敗しました。');
+    }
+}
+
+// =============================================
 // 死亡ログ（game_status.death_log）
 // =============================================
 /**
@@ -517,7 +625,7 @@ export function changeNightTarget(kind) {
  * @param {'attack'|'exile'|'gm'} cause - 襲撃／投票による追放（てるてる含む）／GMの手動追放
  * @param {number|null} [day] - 何日目か（省略時は今のタイムラインの行から）
  */
-export async function appendDeathLog(player, cause, day = dayOfTimelineIndex(getCurrentTimelineIndex())) {
+export async function appendDeathLog(player, cause, day = dayOfTimelineIndex(getCurrentTimelineIndex(), getTimeline())) {
     try {
         const { data, error } = await supabaseClient
             .from('game_status')
@@ -814,7 +922,7 @@ export async function handlePhaseChange(newPhase, newTimelineIndex = null) {
                     const { data: victimRow } = await supabaseClient.from('players').select('name').eq('id', victimId).maybeSingle();
                     victimName = victimRow ? victimRow.name : '不明';
                 }
-                await appendDeathLog({ id: victimId, name: victimName }, 'attack', dayOfTimelineIndex(getCurrentTimelineIndex()));
+                await appendDeathLog({ id: victimId, name: victimName }, 'attack', dayOfTimelineIndex(getCurrentTimelineIndex(), getTimeline()));
             } else {
                 console.log('[WOLF/KNIGHT] handlePhaseChange 襲撃は発生しなかったか、騎士によって守られました。');
                 morningMessage = JSON.stringify({ victim_ids: [] });
@@ -846,22 +954,36 @@ export async function handlePhaseChange(newPhase, newTimelineIndex = null) {
     if (morningMessage !== undefined) {
         updateData.morning_message = morningMessage;
     }
+    // 50分モード：そのフェーズの終了予定時刻（タイマーのない行は null）。フェーズと同じ更新に入れる
+    if (getGameMode() === 'fifty') {
+        const step = newTimelineIndex !== null ? getTimeline()[newTimelineIndex] : null;
+        const seconds = step ? step.seconds : null;
+        updateData.phase_ends_at = seconds ? new Date(Date.now() + seconds * 1000).toISOString() : null;
+    }
 
     try {
         let { error } = await supabaseClient
             .from('game_status')
             .update(updateData)
             .eq('id', 1);
-        if (error && 'morning_message' in updateData) {
-            // 犠牲者の記録が書けなくてもゲームが止まらないよう、記録なしでフェーズだけ進める
-            console.warn('morning_message 付きのフェーズ更新に失敗。記録なしで再試行します:', error);
-            delete updateData.morning_message;
+        // 犠牲者の記録・終了予定時刻が書けなくてもゲームが止まらないよう、それらを外してフェーズだけ進める
+        const optionalKeys = ['morning_message', 'phase_ends_at'].filter(k => k in updateData);
+        if (error && optionalKeys.length > 0) {
+            console.warn(`${optionalKeys.join(', ')} 付きのフェーズ更新に失敗。外して再試行します:`, error);
+            optionalKeys.forEach(k => delete updateData[k]);
             ({ error } = await supabaseClient
                 .from('game_status')
                 .update(updateData)
                 .eq('id', 1));
         }
         if (error) throw error;
+
+        // GM の端末だけで持つ「ゲーム開始から ○分」の起点（役職確認に入った時刻）
+        if (newPhase === 'confirm_role' && getLastKnownPhase() === 'waiting') {
+            setGameStartedAt(Date.now());
+        } else if (newPhase === 'waiting') {
+            setGameStartedAt(null);
+        }
     } catch (error) {
         console.error('フェーズ更新エラー:', error);
         alert('フェーズの更新に失敗しました。');
@@ -912,16 +1034,18 @@ export async function resetGame() {
         if (chatLog) chatLog.innerHTML = '';
 
         // game_status を waiting に戻す（死亡ログも空にする）
-        const resetData = { current_phase: 'waiting', winner: null, timeline_index: 0, hide_vote_details: false, morning_message: null, death_log: [] };
+        // 進め方（game_mode）は書き換えない＝前回の選択を引き継ぐ
+        const resetData = { current_phase: 'waiting', winner: null, timeline_index: 0, hide_vote_details: false, morning_message: null, death_log: [], phase_ends_at: null };
         let { error: phaseError } = await supabaseClient
             .from('game_status')
             .update(resetData)
             .eq('id', 1);
 
         if (phaseError) {
-            // death_log の列が無い等で失敗した場合は、死亡ログ以外を戻す
-            console.warn('death_log 付きのリセットに失敗。death_log なしで再試行します:', phaseError);
+            // death_log・phase_ends_at の列が無い等で失敗した場合は、それ以外を戻す
+            console.warn('death_log / phase_ends_at 付きのリセットに失敗。外して再試行します:', phaseError);
             delete resetData.death_log;
+            delete resetData.phase_ends_at;
             ({ error: phaseError } = await supabaseClient
                 .from('game_status')
                 .update(resetData)
@@ -959,7 +1083,7 @@ export async function advanceTimeline(offset) {
     if (offset === 1) {
         // 【バグ2修正】勝者がすでに確定している場合は終礼（resultフェーズ）へ強制ジャンプ
         if (pendingWinner) {
-            const finalIndex = GAME_TIMELINE.length - 1;
+            const finalIndex = getTimeline().length - 1;
             await handlePhaseChange('result', finalIndex);
             return;
         }
@@ -1004,8 +1128,14 @@ export async function advanceTimeline(offset) {
             return;
         }
 
+        // 50分モード：次の行が結果発表なら結果発表へ（school モードの進み方は変えない）
+        if (getGameMode() === 'fifty') {
+            const nextStep = getTimeline()[nextTimelineIndex];
+            if (nextStep && nextStep.phase === 'result') nextPhase = 'result';
+        }
+
         // 境界値チェック
-        if (nextTimelineIndex >= GAME_TIMELINE.length) {
+        if (nextTimelineIndex >= getTimeline().length) {
             alert('タイムスケジュールはこれ以上進められません。勝敗を確認するか、ゲーム強制終了してください。');
             return;
         }
@@ -1044,7 +1174,7 @@ export async function advanceTimeline(offset) {
             prevTimelineIndex = currentTimelineIndex - 1;
             prevPhase = 'discussion';
         } else if (lastKnownPhase === 'result') {
-            prevTimelineIndex = GAME_TIMELINE.length - 1;
+            prevTimelineIndex = getTimeline().length - 1;
             prevPhase = 'voting';
         }
 

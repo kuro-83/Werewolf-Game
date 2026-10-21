@@ -19,6 +19,7 @@ import {
     getCurrentTimelineIndex, setCurrentTimelineIndex,
     getPendingWinner, setPendingWinner,
     getMorningMessage, setMorningMessage, getDeathLog, setDeathLog,
+    getGameMode, setGameMode, getPhaseEndsAt, setPhaseEndsAt,
     setMyPlayerName, setMyRoleType, setMyRoleName,
     roleCounts,
     saveSession, restoreSessionData, clearSessionData,
@@ -32,6 +33,7 @@ import {
     receiveChatMessage, receiveMissionUpdate,
     showVoteResult, checkMyAliveStatus, renderNightActionStatus,
     showMorningVictims, showMyNightResult, renderDeathLog, switchSideTab, onSideTabKeydown,
+    renderGameModeControls, updatePhaseTimer, startPhaseTimer,
     initRoleCounters, toggleMobileMemo,
     openHelpModal, closeHelpModal, showRoleInfoModal,
     toggleRoleReveal, openWolfChatModal, closeWolfChatModal,
@@ -58,7 +60,8 @@ import {
     onHideVoteDetailsChange,
     sendWolfChatMessage, submitGmMission,
     clearSession, joinGame,
-    submitVoteSkip, changeNightTarget
+    submitVoteSkip, changeNightTarget,
+    selectGameMode, applyRecommendedRoles, extendPhaseTimer
 } from './action.js';
 
 // =============================================
@@ -107,6 +110,9 @@ window.submitVoteSkip = submitVoteSkip;
 window.changeNightTarget = changeNightTarget;
 window.switchSideTab = switchSideTab;
 window.onSideTabKeydown = onSideTabKeydown;
+window.selectGameMode = selectGameMode;
+window.applyRecommendedRoles = applyRecommendedRoles;
+window.extendPhaseTimer = extendPhaseTimer;
 
 // roleCounts をwindow経由で ui.js の updateTotalInfo から参照できるように
 window._roleCounts = roleCounts;
@@ -210,6 +216,12 @@ async function loadGameState() {
         setDeathLog(phaseRes.data.death_log);
         renderDeathLog({ markAsSeen: true });
 
+        // 進め方（列が無い・読めない場合は school 扱い）とタイマー（無ければタイマーなし）
+        setGameMode(phaseRes.data.game_mode);
+        setPhaseEndsAt(phaseRes.data.phase_ends_at ?? null);
+        renderGameModeControls();
+        updatePhaseTimer();
+
         // シークレット投票設定を同期
         if (phaseRes.data.hide_vote_details !== undefined) {
             setHideVoteDetails(!!phaseRes.data.hide_vote_details);
@@ -235,21 +247,37 @@ async function startGameSync() {
         // game_status の更新（フェーズ変更）
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_status' },
             async (payload) => {
-                // 死亡ログだけが増えた更新（フェーズ等は変わっていない）では、画面全体を描き直さない
+                // フェーズ・タイムライン・朝の記録・シークレット投票・勝者が変わっていない更新
+                // （死亡ログ・タイマーの延長・進め方の切り替えなど）では、画面全体を描き直さない
                 // （夜の選択途中の画面や、めくった役職カードが戻ってしまわないように）
-                const onlyDeathLogChanged =
+                const samePhaseUpdate =
                     payload.new.current_phase === getLastKnownPhase() &&
                     payload.new.timeline_index === getCurrentTimelineIndex() &&
                     (payload.new.morning_message ?? null) === (getMorningMessage() ?? null) &&
                     !!payload.new.hide_vote_details === !!getHideVoteDetails() &&
-                    (payload.new.winner ?? null) === (getPendingWinner() ?? null) &&
-                    payload.new.death_log !== undefined &&
-                    JSON.stringify(payload.new.death_log) !== JSON.stringify(getDeathLog());
-                if (onlyDeathLogChanged) {
-                    setDeathLog(payload.new.death_log);
-                    renderDeathLog();
+                    (payload.new.winner ?? null) === (getPendingWinner() ?? null);
+                if (samePhaseUpdate) {
+                    if (payload.new.death_log !== undefined &&
+                        JSON.stringify(payload.new.death_log) !== JSON.stringify(getDeathLog())) {
+                        setDeathLog(payload.new.death_log);
+                        renderDeathLog();
+                    }
+                    if (payload.new.phase_ends_at !== undefined) {
+                        setPhaseEndsAt(payload.new.phase_ends_at);
+                        updatePhaseTimer();
+                    }
+                    if (payload.new.game_mode !== undefined && (payload.new.game_mode === 'fifty' ? 'fifty' : 'school') !== getGameMode()) {
+                        setGameMode(payload.new.game_mode);
+                        renderGameModeControls();
+                        renderTimeline();
+                        updateGmTimelineButtons();
+                    }
                     return;
                 }
+
+                // 進め方・タイマー（フェーズの表示より前にセットする）
+                if (payload.new.game_mode !== undefined) setGameMode(payload.new.game_mode);
+                if (payload.new.phase_ends_at !== undefined) setPhaseEndsAt(payload.new.phase_ends_at);
 
                 if (payload.new.winner) {
                     setPendingWinner(payload.new.winner);
@@ -274,6 +302,8 @@ async function startGameSync() {
                 await updatePhaseDisplay(payload.new.current_phase);
                 renderTimeline();
                 updateGmTimelineButtons();
+                renderGameModeControls();
+                updatePhaseTimer();
             }
         )
         // プレイヤーの入室
@@ -476,6 +506,9 @@ function restoreSession() {
 // =============================================
 // 配色（この端末だけの設定）を復元し、配色ボタンを使えるようにする
 initPalette();
+
+// 50分モードのタイマー（1秒ごとに残り時間を描き直す。phase_ends_at が無ければ何も出さない）
+startPhaseTimer();
 
 window.addEventListener('DOMContentLoaded', () => {
     restoreSession();

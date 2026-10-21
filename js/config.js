@@ -14,7 +14,8 @@ export const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 // タイムスケジュール（タイムライン）定義
 // label は「2日目　朝の生存確認」の形（日付と内容の間は全角スペース）。上のバーの「○日目」もここから読む
 // =============================================
-export const GAME_TIMELINE = [
+// 「休み時間に1日かけて」（今までのモード）
+const SCHOOL_TIMELINE = [
     { period: "朝礼", phase: "waiting", label: "ルール説明" },
     { period: "朝礼", phase: "confirm_role", label: "役職の確認" },
     { period: "1限前休み", phase: "night", label: "1日目　夜" },
@@ -45,12 +46,46 @@ export const GAME_TIMELINE = [
     { period: "終礼", phase: "result", label: "結果発表・ネタばらし" }
 ];
 
+// 「50分で1ゲーム」（授業の1コマで約23人が遊び切る用）。seconds は目安の時間（タイマーなしは null）
+// 投票は2〜6日目の5回。6日目の投票（finalVote）の集計で勝敗が決まっていなければ人狼の勝ち（時間切れ）
+const FIFTY_TIMELINE = [
+    { period: "準備", phase: "waiting", label: "ルール説明", seconds: null },
+    { period: "準備", phase: "confirm_role", label: "役職の確認", seconds: 120 },
+    { period: "1日目", phase: "night", label: "1日目　夜", seconds: 120 },
+    { period: "2日目", phase: "morning", label: "2日目　朝", seconds: 60 },
+    { period: "2日目", phase: "discussion", label: "2日目　議論", seconds: 240 },
+    { period: "2日目", phase: "voting", label: "2日目　投票", seconds: 60 },
+    { period: "2日目", phase: "night", label: "2日目　夜", seconds: 120 },
+    { period: "3日目", phase: "morning", label: "3日目　朝", seconds: 60 },
+    { period: "3日目", phase: "discussion", label: "3日目　議論", seconds: 240 },
+    { period: "3日目", phase: "voting", label: "3日目　投票", seconds: 60 },
+    { period: "3日目", phase: "night", label: "3日目　夜", seconds: 120 },
+    { period: "4日目", phase: "morning", label: "4日目　朝", seconds: 60 },
+    { period: "4日目", phase: "discussion", label: "4日目　議論", seconds: 240 },
+    { period: "4日目", phase: "voting", label: "4日目　投票", seconds: 60 },
+    { period: "4日目", phase: "night", label: "4日目　夜", seconds: 120 },
+    { period: "5日目", phase: "morning", label: "5日目　朝", seconds: 60 },
+    { period: "5日目", phase: "discussion", label: "5日目　議論", seconds: 240 },
+    { period: "5日目", phase: "voting", label: "5日目　投票", seconds: 60 },
+    { period: "5日目", phase: "night", label: "5日目　夜", seconds: 120 },
+    { period: "6日目", phase: "morning", label: "6日目　朝", seconds: 60 },
+    { period: "6日目", phase: "discussion", label: "6日目　議論", seconds: 240 },
+    { period: "6日目", phase: "voting", label: "6日目　最後の投票", seconds: 60, finalVote: true },
+    { period: "終了", phase: "result", label: "結果発表", seconds: null }
+];
+
+// 進め方（game_status.game_mode）ごとのタイムテーブル。今のモードの表は state.js の getTimeline() で取る
+export const TIMELINES = {
+    school: SCHOOL_TIMELINE,
+    fifty: FIFTY_TIMELINE
+};
+
 /**
- * タイムテーブルの行から「何日目か」を取り出す（label の先頭の「N日目」）
+ * タイムテーブルの行から「何日目か」を取り出す（label の先頭の「N日目」。両方のモードの表で使える）
  * @returns {number|null} 取り出せなければ null（ルール説明・結果発表など）
  */
-export function dayOfTimelineIndex(index) {
-    const step = GAME_TIMELINE[index];
+export function dayOfTimelineIndex(index, timeline = SCHOOL_TIMELINE) {
+    const step = timeline[index];
     const match = step ? step.label.match(/^(\d+)日目/) : null;
     return match ? Number(match[1]) : null;
 }
@@ -129,6 +164,9 @@ export const ROLE_BADGE_CLASS = {
     '騎士': 'role-badge-knight',
     'てるてる': 'role-badge-teruteru'
 };
+
+// 名前カードがこの枚数以上のときは、小さいカード（PC で1行8枚）にする
+export const DENSE_CARD_COUNT = 13;
 
 // 夜フェーズにアクションがある役職（ここにない役職は夜にダミー質問が出る）
 export const NIGHT_ACTION_ROLES = ['人狼', '預言者', '霊媒師', '騎士'];
