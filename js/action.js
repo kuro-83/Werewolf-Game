@@ -253,7 +253,7 @@ export async function countAndExile() {
         return;
     }
 
-    // 50分モードの最後の投票なら、ここで勝敗を決める（追放された人は死亡として数える）
+    // 最後の投票なら、ここで勝敗を決める（追放された人は死亡として数える）
     await settleIfFinalVote(freshPlayers.map(p => p.id === exiledId ? { ...p, is_alive: false } : p));
 
     // GMは直接リザルトを表示（他クライアントは is_alive の Realtime イベントから呼ばれる）
@@ -261,13 +261,12 @@ export async function countAndExile() {
 }
 
 /**
- * 50分モードの最後の投票（finalVote の行）の集計が終わった時点で、勝敗が決まっていなければ決める
+ * 最後の投票（finalVote の行）の集計が終わった時点で、勝敗が決まっていなければ決める（どちらのモードでも）
  * 人狼0 → 村人の勝ち、人狼 ≧ それ以外 → 人狼の勝ち、それ以外 → 時間切れで人狼の勝ち（'wolf_timeout'）
- * school モードや、最後の投票以外では何もしない。てるてるの追放は countAndExile の中で先に終わっている
+ * 最後の投票以外では何もしない。てるてるの追放は countAndExile の中で先に終わっている
  * @param {object[]} players - 集計後の全プレイヤー（追放された人は is_alive: false にしたもの）
  */
 async function settleIfFinalVote(players) {
-    if (getGameMode() !== 'fifty') return;
     const step = getTimeline()[getCurrentTimelineIndex()];
     if (!step || !step.finalVote) return;
     if (getPendingWinner()) return;
@@ -723,9 +722,21 @@ export async function distributeRolesAndStartGame() {
         alert('役職が設定されていません。少なくとも1つ設定してください。');
         return false;
     }
-    const currentPlayersCount = getCurrentPlayers().length;
-    if (totalRoles !== currentPlayersCount) {
-        alert(`役職の合計人数（${totalRoles}人）と参加者数（${currentPlayersCount}人）が一致しません！`);
+    // 参加人数は手元の一覧ではなく、その場で DB から数え直す（Realtime で取りこぼした参加者がいても正しく数えるため）
+    const { data: players, error } = await supabaseClient
+        .from('players')
+        .select('id, name, is_alive, role, vote_target_id, night_target_id');
+    if (error || !players) {
+        alert('プレイヤー情報の取得に失敗しました');
+        return false;
+    }
+    // 取得した一覧で手元の state と画面も更新しておく
+    setCurrentPlayers(players);
+    renderPlayerList();
+    renderMemoList();
+
+    if (totalRoles !== players.length) {
+        alert(`役職の合計人数（${totalRoles}人）と参加者数（${players.length}人）が一致しません！`);
         return false;
     }
 
@@ -739,17 +750,6 @@ export async function distributeRolesAndStartGame() {
     for (let i = roleDeck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [roleDeck[i], roleDeck[j]] = [roleDeck[j], roleDeck[i]];
-    }
-
-    const { data: players, error } = await supabaseClient.from('players').select('id, name');
-    if (error || !players) {
-        alert('プレイヤー情報の取得に失敗しました');
-        return false;
-    }
-    // 設定を確認した直後に入退室があった場合は、配る前に中止する
-    if (players.length !== roleDeck.length) {
-        alert(`役職の合計人数（${roleDeck.length}人）と参加者数（${players.length}人）が一致しません！`);
-        return false;
     }
 
     const FAIL_MSG = '役職の配布に失敗しました。もう一度試してください。';
@@ -1128,11 +1128,9 @@ export async function advanceTimeline(offset) {
             return;
         }
 
-        // 50分モード：次の行が結果発表なら結果発表へ（school モードの進み方は変えない）
-        if (getGameMode() === 'fifty') {
-            const nextStep = getTimeline()[nextTimelineIndex];
-            if (nextStep && nextStep.phase === 'result') nextPhase = 'result';
-        }
+        // 次の行が結果発表なら結果発表へ（どちらのモードも最後の投票の次は結果発表の行）
+        const nextStep = getTimeline()[nextTimelineIndex];
+        if (nextStep && nextStep.phase === 'result') nextPhase = 'result';
 
         // 境界値チェック
         if (nextTimelineIndex >= getTimeline().length) {

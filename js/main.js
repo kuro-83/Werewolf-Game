@@ -140,6 +140,49 @@ let insertedWhileLoading = null;
  * Realtime の購読が SUBSCRIBED になった後（再接続時も）に呼ぶ。
  * 購読より先に取得すると、その間の参加（INSERT）を取りこぼすため。
  */
+// players の取得列（初期取得・取り直しで共通）
+const PLAYER_COLUMNS = 'id, name, is_alive, role, vote_target_id, night_target_id';
+
+/** 2つの参加者一覧が同じか（並び順は問わない） */
+function samePlayers(a, b) {
+    if (a.length !== b.length) return false;
+    const key = p => [p.id, p.name, p.is_alive, p.role, p.vote_target_id, p.night_target_id].map(String).join('|');
+    return a.map(key).sort().join('\n') === b.map(key).sort().join('\n');
+}
+
+/**
+ * players だけを取り直して、変わっていれば一覧（参加者・考察メモ）に反映する
+ * Realtime の INSERT が届かなかった参加者を拾うための保険。画面全体（フェーズの表示）は描き直さない
+ */
+async function refreshPlayersFromDb(reason) {
+    try {
+        const { data, error } = await supabaseClient.from('players').select(PLAYER_COLUMNS);
+        if (error) throw error;
+        if (!data || samePlayers(data, getCurrentPlayers())) return;
+        console.log(`[SYNC] ${reason}：参加者一覧を更新しました（${getCurrentPlayers().length} → ${data.length}人）`);
+        setCurrentPlayers(data);
+        renderPlayerList();
+        renderMemoList();
+    } catch (err) {
+        console.warn(`[SYNC] ${reason}：参加者の取り直しに失敗しました:`, err);
+    }
+}
+
+// 待機中だけ5秒ごとに参加者を取り直す（購読直後にイベントが届かない空白があり、参加を取りこぼすことがあるため）
+const WAITING_POLL_MS = 5000;
+let waitingPollId = null;
+
+function syncWaitingPoll(phase) {
+    if (phase === 'waiting') {
+        if (!waitingPollId) {
+            waitingPollId = setInterval(() => refreshPlayersFromDb('待機中の取り直し'), WAITING_POLL_MS);
+        }
+    } else if (waitingPollId) {
+        clearInterval(waitingPollId);
+        waitingPollId = null;
+    }
+}
+
 async function loadGameState() {
     const seq = ++loadSeq;
     insertedWhileLoading = new Map();
@@ -154,7 +197,7 @@ async function loadGameState() {
         // role・vote_target_id を含めて取得
         const playersRes = await supabaseClient
             .from('players')
-            .select('id, name, is_alive, role, vote_target_id, night_target_id');
+            .select(PLAYER_COLUMNS);
         if (playersRes.error) throw playersRes.error;
 
         // もっと新しい取得が始まっていたら、この結果は使わない
@@ -229,6 +272,7 @@ async function loadGameState() {
         }
 
         await updatePhaseDisplay(phaseRes.data.current_phase);
+        syncWaitingPoll(phaseRes.data.current_phase);
         renderTimeline();
         updateGmTimelineButtons();
 
@@ -241,6 +285,13 @@ async function loadGameState() {
 
 async function startGameSync() {
     let loadedOnce = false;
+
+    // タブが前面に戻ったとき（スリープ復帰など）にも参加者を一度取り直す
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && loadedOnce) {
+            refreshPlayersFromDb('タブが前面に戻った');
+        }
+    });
 
     // Realtime の購読を先に始め、SUBSCRIBED になってから初期データを取得する
     supabaseClient.channel('room_sync_channel')
@@ -300,6 +351,7 @@ async function startGameSync() {
                     renderDeathLog();
                 }
                 await updatePhaseDisplay(payload.new.current_phase);
+                syncWaitingPoll(payload.new.current_phase);
                 renderTimeline();
                 updateGmTimelineButtons();
                 renderGameModeControls();

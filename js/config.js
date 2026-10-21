@@ -12,66 +12,67 @@ export const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 
 // =============================================
 // タイムスケジュール（タイムライン）定義
-// label は「2日目　朝の生存確認」の形（日付と内容の間は全角スペース）。上のバーの「○日目」もここから読む
+// 各行の day は何日目か（日付のない行は null）。死亡ログ・上のバーの「○日目」は day を使う
+// 1日モードの label は「2日目　朝の生存確認」の形（日付と内容の間は全角スペース）
 // =============================================
 // 「休み時間に1日かけて」（今までのモード）
 const SCHOOL_TIMELINE = [
-    { period: "朝礼", phase: "waiting", label: "ルール説明" },
-    { period: "朝礼", phase: "confirm_role", label: "役職の確認" },
-    { period: "1限前休み", phase: "night", label: "1日目　夜" },
-    { period: "2限前休み", phase: "morning", label: "2日目　朝の生存確認" },
-    { period: "2限前休み", phase: "discussion", label: "2日目　昼の議論" },
-    { period: "2限前休み", phase: "voting", label: "2日目　投票" },
-    { period: "2限前休み", phase: "night", label: "2日目　夜の襲撃" },
-    { period: "3限前休み", phase: "morning", label: "3日目　朝の生存確認" },
-    { period: "3限前休み", phase: "discussion", label: "3日目　昼の議論" },
-    { period: "3限前休み", phase: "voting", label: "3日目　投票" },
-    { period: "3限前休み", phase: "night", label: "3日目　夜の襲撃" },
-    { period: "昼休み(前半)", phase: "morning", label: "4日目　朝の生存確認" },
-    { period: "昼休み(前半)", phase: "discussion", label: "4日目　昼の議論" },
-    { period: "昼休み(前半)", phase: "voting", label: "4日目　投票" },
-    { period: "昼休み(前半)", phase: "night", label: "4日目　夜の襲撃" },
-    { period: "昼休み(中盤)", phase: "morning", label: "5日目　朝の生存確認" },
-    { period: "昼休み(中盤)", phase: "discussion", label: "5日目　大議論" },
-    { period: "昼休み(後半)", phase: "voting", label: "5日目　投票" },
-    { period: "昼休み(後半)", phase: "night", label: "5日目　夜の襲撃" },
-    { period: "5限前休み", phase: "morning", label: "6日目　朝の生存確認" },
-    { period: "5限前休み", phase: "discussion", label: "6日目　昼の議論" },
-    { period: "5限前休み", phase: "voting", label: "6日目　投票" },
-    { period: "5限前休み", phase: "night", label: "6日目　夜の襲撃" },
-    { period: "6限前休み", phase: "morning", label: "7日目　朝の生存確認" },
-    { period: "6限前休み", phase: "discussion", label: "7日目　昼の議論" },
-    { period: "6限前休み", phase: "voting", label: "7日目　投票" },
-    { period: "6限前休み", phase: "night", label: "7日目　夜の襲撃" },
-    { period: "終礼", phase: "result", label: "結果発表・ネタばらし" }
+    { period: "朝礼", phase: "waiting", label: "ルール説明", day: null },
+    { period: "朝礼", phase: "confirm_role", label: "役職の確認", day: null },
+    { period: "1限前休み", phase: "night", label: "1日目　夜", day: 1 },
+    { period: "2限前休み", phase: "morning", label: "2日目　朝の生存確認", day: 2 },
+    { period: "2限前休み", phase: "discussion", label: "2日目　昼の議論", day: 2 },
+    { period: "2限前休み", phase: "voting", label: "2日目　投票", day: 2 },
+    { period: "2限前休み", phase: "night", label: "2日目　夜の襲撃", day: 2 },
+    { period: "3限前休み", phase: "morning", label: "3日目　朝の生存確認", day: 3 },
+    { period: "3限前休み", phase: "discussion", label: "3日目　昼の議論", day: 3 },
+    { period: "3限前休み", phase: "voting", label: "3日目　投票", day: 3 },
+    { period: "3限前休み", phase: "night", label: "3日目　夜の襲撃", day: 3 },
+    { period: "昼休み(前半)", phase: "morning", label: "4日目　朝の生存確認", day: 4 },
+    { period: "昼休み(前半)", phase: "discussion", label: "4日目　昼の議論", day: 4 },
+    { period: "昼休み(前半)", phase: "voting", label: "4日目　投票", day: 4 },
+    { period: "昼休み(前半)", phase: "night", label: "4日目　夜の襲撃", day: 4 },
+    { period: "昼休み(中盤)", phase: "morning", label: "5日目　朝の生存確認", day: 5 },
+    { period: "昼休み(中盤)", phase: "discussion", label: "5日目　大議論", day: 5 },
+    { period: "昼休み(後半)", phase: "voting", label: "5日目　投票", day: 5 },
+    { period: "昼休み(後半)", phase: "night", label: "5日目　夜の襲撃", day: 5 },
+    { period: "5限前休み", phase: "morning", label: "6日目　朝の生存確認", day: 6 },
+    { period: "5限前休み", phase: "discussion", label: "6日目　昼の議論", day: 6 },
+    { period: "5限前休み", phase: "voting", label: "6日目　投票", day: 6 },
+    { period: "5限前休み", phase: "night", label: "6日目　夜の襲撃", day: 6 },
+    { period: "6限前休み", phase: "morning", label: "7日目　朝の生存確認", day: 7 },
+    { period: "6限前休み", phase: "discussion", label: "7日目　昼の議論", day: 7 },
+    { period: "6限前休み", phase: "voting", label: "7日目　最後の投票", day: 7, finalVote: true },
+    { period: "終礼", phase: "result", label: "結果発表・ネタばらし", day: null }
 ];
 
 // 「50分で1ゲーム」（授業の1コマで約23人が遊び切る用）。seconds は目安の時間（タイマーなしは null）
-// 投票は2〜6日目の5回。6日目の投票（finalVote）の集計で勝敗が決まっていなければ人狼の勝ち（時間切れ）
+// 区切りの列に「1日目」などが出るので、label には日付を入れない
+// 投票は2〜6日目の5回。最後の投票（finalVote）の集計で勝敗が決まっていなければ人狼の勝ち（時間切れ）。1日モードも同じ
 const FIFTY_TIMELINE = [
-    { period: "準備", phase: "waiting", label: "ルール説明", seconds: null },
-    { period: "準備", phase: "confirm_role", label: "役職の確認", seconds: 120 },
-    { period: "1日目", phase: "night", label: "1日目　夜", seconds: 120 },
-    { period: "2日目", phase: "morning", label: "2日目　朝", seconds: 60 },
-    { period: "2日目", phase: "discussion", label: "2日目　議論", seconds: 240 },
-    { period: "2日目", phase: "voting", label: "2日目　投票", seconds: 60 },
-    { period: "2日目", phase: "night", label: "2日目　夜", seconds: 120 },
-    { period: "3日目", phase: "morning", label: "3日目　朝", seconds: 60 },
-    { period: "3日目", phase: "discussion", label: "3日目　議論", seconds: 240 },
-    { period: "3日目", phase: "voting", label: "3日目　投票", seconds: 60 },
-    { period: "3日目", phase: "night", label: "3日目　夜", seconds: 120 },
-    { period: "4日目", phase: "morning", label: "4日目　朝", seconds: 60 },
-    { period: "4日目", phase: "discussion", label: "4日目　議論", seconds: 240 },
-    { period: "4日目", phase: "voting", label: "4日目　投票", seconds: 60 },
-    { period: "4日目", phase: "night", label: "4日目　夜", seconds: 120 },
-    { period: "5日目", phase: "morning", label: "5日目　朝", seconds: 60 },
-    { period: "5日目", phase: "discussion", label: "5日目　議論", seconds: 240 },
-    { period: "5日目", phase: "voting", label: "5日目　投票", seconds: 60 },
-    { period: "5日目", phase: "night", label: "5日目　夜", seconds: 120 },
-    { period: "6日目", phase: "morning", label: "6日目　朝", seconds: 60 },
-    { period: "6日目", phase: "discussion", label: "6日目　議論", seconds: 240 },
-    { period: "6日目", phase: "voting", label: "6日目　最後の投票", seconds: 60, finalVote: true },
-    { period: "終了", phase: "result", label: "結果発表", seconds: null }
+    { period: "準備", phase: "waiting", label: "ルール説明", day: null, seconds: null },
+    { period: "準備", phase: "confirm_role", label: "役職の確認", day: null, seconds: 120 },
+    { period: "1日目", phase: "night", label: "夜", day: 1, seconds: 120 },
+    { period: "2日目", phase: "morning", label: "朝", day: 2, seconds: 60 },
+    { period: "2日目", phase: "discussion", label: "議論", day: 2, seconds: 240 },
+    { period: "2日目", phase: "voting", label: "投票", day: 2, seconds: 60 },
+    { period: "2日目", phase: "night", label: "夜", day: 2, seconds: 120 },
+    { period: "3日目", phase: "morning", label: "朝", day: 3, seconds: 60 },
+    { period: "3日目", phase: "discussion", label: "議論", day: 3, seconds: 240 },
+    { period: "3日目", phase: "voting", label: "投票", day: 3, seconds: 60 },
+    { period: "3日目", phase: "night", label: "夜", day: 3, seconds: 120 },
+    { period: "4日目", phase: "morning", label: "朝", day: 4, seconds: 60 },
+    { period: "4日目", phase: "discussion", label: "議論", day: 4, seconds: 240 },
+    { period: "4日目", phase: "voting", label: "投票", day: 4, seconds: 60 },
+    { period: "4日目", phase: "night", label: "夜", day: 4, seconds: 120 },
+    { period: "5日目", phase: "morning", label: "朝", day: 5, seconds: 60 },
+    { period: "5日目", phase: "discussion", label: "議論", day: 5, seconds: 240 },
+    { period: "5日目", phase: "voting", label: "投票", day: 5, seconds: 60 },
+    { period: "5日目", phase: "night", label: "夜", day: 5, seconds: 120 },
+    { period: "6日目", phase: "morning", label: "朝", day: 6, seconds: 60 },
+    { period: "6日目", phase: "discussion", label: "議論", day: 6, seconds: 240 },
+    { period: "6日目", phase: "voting", label: "最後の投票", day: 6, seconds: 60, finalVote: true },
+    { period: "終了", phase: "result", label: "結果発表", day: null, seconds: null }
 ];
 
 // 進め方（game_status.game_mode）ごとのタイムテーブル。今のモードの表は state.js の getTimeline() で取る
@@ -81,13 +82,12 @@ export const TIMELINES = {
 };
 
 /**
- * タイムテーブルの行から「何日目か」を取り出す（label の先頭の「N日目」。両方のモードの表で使える）
+ * タイムテーブルの行の「何日目か」（各行の day。両方のモードの表で使える）
  * @returns {number|null} 取り出せなければ null（ルール説明・結果発表など）
  */
 export function dayOfTimelineIndex(index, timeline = SCHOOL_TIMELINE) {
     const step = timeline[index];
-    const match = step ? step.label.match(/^(\d+)日目/) : null;
-    return match ? Number(match[1]) : null;
+    return step && typeof step.day === 'number' ? step.day : null;
 }
 
 // =============================================
